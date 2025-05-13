@@ -1,7 +1,6 @@
 from database import Database
 import json, os
 
-ine=2
 
 def load_data_db(db: Database, data_path: str):
     """
