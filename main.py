@@ -1,4 +1,5 @@
 from database import Database
+from journey_planner import JourneyPlanner
 import json, os
 
 
@@ -17,10 +18,7 @@ def load_data_db(db: Database, data_path: str):
         print(f"Downloading GTFS data from {name}: {gtfs_url}")
         try:
             # Check if the URL is valid
-            zip_buffer = db.download_and_extract_gtfs(gtfs_url)
-            print(f"Populating database with data from {name}...")
-            db.populate_database(zip_buffer)
-            print(f"Data from {name} populated successfully.")
+            db.download_and_populate_gtfs(gtfs_url)
         except Exception as e:
             print(f"Error downloading or populating data from {name}: {e}")
 
@@ -29,10 +27,10 @@ def load_data_db(db: Database, data_path: str):
 if __name__ == "__main__":
     db = Database()
     data_path = "data_sources.json"
-    load_data_db(db, data_path)
+    # load_data_db(db, data_path)
     conn, cursor = db.get_connection()
 
-    agencies = [
+    '''agencies = [
         "SNCF Voyageurs",
         "OCEdefault",
         "CFF",
@@ -53,3 +51,8 @@ if __name__ == "__main__":
         )
         count = cursor.fetchone()[0]
         print(f"Number of routes for {agency}: {count}")
+
+    '''
+    jp = JourneyPlanner(db)
+
+    print("placeholder line for stopping the debugger")

@@ -172,7 +172,7 @@ class Database:
         conn.commit()
         conn.close()
 
-    def download_and_extract_gtfs(self, url):
+    def download_gtfs(self, url):
         # Download the GTFS ZIP file
         response = requests.get(url)
         if response.status_code == 200:
@@ -212,6 +212,10 @@ class Database:
                         with io.TextIOWrapper(file, encoding="utf-8-sig") as f:
                             reader = csv.DictReader(f)
                             columns = reader.fieldnames
+                            if columns is None:
+                                raise ValueError(
+                                    f"CSV file {file_name} has no header or is improperly formatted."
+                                )
                             placeholders = ", ".join(["?"] * len(columns))
                             insert_query = f"INSERT OR IGNORE INTO {table_name} ({', '.join(columns)}) VALUES ({placeholders})"
                             for row in reader:
@@ -221,6 +225,13 @@ class Database:
         # Commit and close the connection
         conn.commit()
         conn.close()
+
+    def download_and_populate_gtfs(self, url):
+        """
+        Download GTFS data from the given URL and populate the database.
+        """
+        zip_buffer = self.download_gtfs(url)
+        self.populate_database(zip_buffer)
 
     def get_connection(self):
         """
