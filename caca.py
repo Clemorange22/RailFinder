@@ -9,6 +9,9 @@ class RoutePlannerApp:
         self.master = master
         self.liste_ville = liste_ville
         self.active_entry = None
+        self.loading_label = ttk.Label(master, text="Chargement en cours...", font=("Arial", 14), foreground="blue")
+        self.loading_label.place(relx=0.5, rely=0.5, anchor="center")
+        self.master.update_idletasks()
         master.title("Rail Finder - Planificateur d'Itinéraires")
         master.geometry("800x600")
 
@@ -142,6 +145,7 @@ class RoutePlannerApp:
             tk.END, "Les détails de l'itinéraire s'afficheront ici..."
         )
         self.route_details_text.config(state=tk.DISABLED)
+        self.loading_label.destroy()
 
     def add_stop(self):
         if len(self.intermediate_stops_entries) < 5:
