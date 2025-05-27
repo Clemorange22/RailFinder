@@ -12,6 +12,9 @@ class RoutePlannerApp:
         self.master = master
         self.liste_ville = liste_ville
         self.active_entry = None
+        self.loading_label = ttk.Label(master, text="Chargement en cours...", font=("Arial", 14), foreground="blue")
+        self.loading_label.place(relx=0.5, rely=0.5, anchor="center")
+        self.master.update_idletasks()
         master.title("Rail Finder - Planificateur d'Itinéraires")
         master.geometry("800x600")
 
@@ -122,18 +125,16 @@ class RoutePlannerApp:
         calculate_button.grid(row=12, column=0, columnspan=2, padx=5, pady=20)
 
         # Display Frame Widgets
-        map_canvas_frame = ttk.LabelFrame(
-            display_frame, text="Carte de l'itinéraire", width=400, height=250
-        )
+        
+        #Display travel map
+        map_canvas_frame = ttk.LabelFrame(display_frame)
         map_canvas_frame.pack(pady=10, padx=10, fill="both", expand=True)
-        self.map_canvas = tk.Canvas(map_canvas_frame, bg="lightgrey")
+        self.map_canvas = TkinterMapView(map_canvas_frame, width=400, height=260, corner_radius=0)
+        #definition of zoom scale and map position
+        self.map_canvas.set_position(46.7111, 1.7191)
+        self.map_canvas.set_zoom(5)
         self.map_canvas.pack(fill="both", expand=True)
-        self.map_canvas.create_text(
-            10,
-            10,
-            anchor="nw",
-            text="Espace réservé pour la carte (matplotlib/tkinter)",
-        )
+        
 
         route_details_frame = ttk.LabelFrame(display_frame, text="Détails du trajet")
         route_details_frame.pack(pady=10, padx=10, fill="both", expand=True)
@@ -145,6 +146,7 @@ class RoutePlannerApp:
             tk.END, "Les détails de l'itinéraire s'afficheront ici..."
         )
         self.route_details_text.config(state=tk.DISABLED)
+        self.loading_label.destroy()
 
     def add_stop(self):
         if len(self.intermediate_stops_entries) < 5:
