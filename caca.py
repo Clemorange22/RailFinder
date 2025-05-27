@@ -26,7 +26,7 @@ class RoutePlannerApp:
         # --- Control Frame Widgets ---
 
         # Departure City
-        ttk.Label(control_frame, text="Ville de départ:").grid(
+        ttk.Label(control_frame, text="Ville de départ :").grid(
             row=0, column=0, padx=5, pady=5, sticky="w"
         )
         self.departure_city_entry = ttk.Entry(control_frame, width=30)
@@ -43,7 +43,7 @@ class RoutePlannerApp:
         self.suggestions_listbox.bind("<Down>", self.navigate_down)
 
         # Arrival City
-        ttk.Label(control_frame, text="Ville d'arrivée:").grid(
+        ttk.Label(control_frame, text="Ville d'arrivée :").grid(
             row=1, column=0, padx=5, pady=5, sticky="w"
         )
         self.arrival_city_entry = ttk.Entry(control_frame, width=30)
@@ -52,7 +52,7 @@ class RoutePlannerApp:
         self.arrival_city_entry.bind("<Down>", self.focus_suggestions_listbox)
 
         # Intermediate Stops
-        ttk.Label(control_frame, text="Étapes intermédiaires:").grid(
+        ttk.Label(control_frame, text="Étapes :").grid(
             row=2, column=0, columnspan=2, padx=5, pady=5, sticky="w"
         )
         self.stops_frame = ttk.Frame(control_frame)
@@ -64,6 +64,7 @@ class RoutePlannerApp:
             control_frame, text="Ajouter une étape", command=self.add_stop
         )
         self.add_stop_button.grid(row=4, column=0, padx=5, pady=5, sticky="w")
+        self.add_stop_button = ttk.Entry(control_frame, width=30)
         self.remove_stop_button = ttk.Button(
             control_frame, text="Supprimer la dernière étape", command=self.remove_stop
         )
@@ -149,6 +150,8 @@ class RoutePlannerApp:
             stop_label.grid(row=row_num, column=0, padx=5, pady=2, sticky="w")
             stop_entry = ttk.Entry(self.stops_frame, width=28)
             stop_entry.grid(row=row_num, column=1, padx=5, pady=2, sticky="ew")
+            stop_entry.bind("<KeyRelease>", self.auto_completion_proposition)
+            stop_entry.bind("<Down>", self.focus_suggestions_listbox)
             self.intermediate_stops_entries.append((stop_label, stop_entry))
         else:
             messagebox.showinfo(
