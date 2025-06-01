@@ -4,6 +4,8 @@ import requests
 import zipfile
 import csv
 import os
+from models import Agency, Route, Shape, StopTime, Stop, Transfer, Trip
+from typing import Optional
 
 
 class Database:
@@ -239,3 +241,119 @@ class Database:
         """
         conn = sqlite3.connect(self.db_name)
         return conn, conn.cursor()
+
+    def create_gtfs_indexes(self):
+        conn = sqlite3.connect(self.db_name)
+        cursor = conn.cursor()
+
+        print("Creating GTFS indexes...")
+        cursor.execute(
+            "CREATE INDEX IF NOT EXISTS idx_stop_times_stop_id_arrival ON stop_times (stop_id, arrival_time)"
+        )
+        cursor.execute(
+            "CREATE INDEX IF NOT EXISTS idx_stop_times_trip_id ON stop_times (trip_id)"
+        )
+        cursor.execute(
+            "CREATE INDEX IF NOT EXISTS idx_trips_service_id ON trips (service_id)"
+        )
+        cursor.execute(
+            "CREATE INDEX IF NOT EXISTS idx_trips_route_id ON trips (route_id)"
+        )
+        cursor.execute(
+            "CREATE INDEX IF NOT EXISTS idx_routes_agency_id ON routes (agency_id)"
+        )
+        cursor.execute(
+            "CREATE INDEX IF NOT EXISTS idx_calendar_service_id ON calendar (service_id)"
+        )
+        cursor.execute(
+            "CREATE INDEX IF NOT EXISTS idx_calendar_dates_service_id_date ON calendar_dates (service_id, date)"
+        )
+        cursor.execute(
+            "CREATE INDEX IF NOT EXISTS idx_stops_stop_name ON stops (stop_name)"
+        )
+        cursor.execute(
+            "CREATE INDEX IF NOT EXISTS idx_transfers_from_stop_id ON transfers (from_stop_id)"
+        )
+        cursor.execute(
+            "CREATE INDEX IF NOT EXISTS idx_transfers_to_stop_id ON transfers (to_stop_id)"
+        )
+        cursor.execute(
+            "CREATE INDEX IF NOT EXISTS idx_shapes_shape_id ON shapes (shape_id)"
+        )
+        print("GTFS indexes created successfully.")
+
+        conn.commit()
+        conn.close()
+
+    def get_agency_by_id(self, agency_id: str) -> Optional[Agency]:
+        conn = sqlite3.connect(self.db_name)
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
+        cursor.execute("SELECT * FROM agency WHERE agency_id = ?", (agency_id,))
+        row = cursor.fetchone()
+        conn.close()
+        return Agency(**dict(row)) if row else None
+
+    def get_route_by_id(self, route_id: str) -> Optional[Route]:
+        conn = sqlite3.connect(self.db_name)
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
+        cursor.execute("SELECT * FROM routes WHERE route_id = ?", (route_id,))
+        row = cursor.fetchone()
+        conn.close()
+        return Route(**dict(row)) if row else None
+
+    def get_shape_by_id(self, shape_id: str) -> Optional[Shape]:
+        conn = sqlite3.connect(self.db_name)
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
+        cursor.execute("SELECT * FROM shapes WHERE shape_id = ?", (shape_id,))
+        row = cursor.fetchone()
+        conn.close()
+        return Shape(**dict(row)) if row else None
+
+    def get_stop_time_by_id(
+        self, trip_id: str, stop_id: str, stop_sequence: int
+    ) -> Optional[StopTime]:
+        conn = sqlite3.connect(self.db_name)
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
+        cursor.execute(
+            "SELECT * FROM stop_times WHERE trip_id = ? AND stop_id = ? AND stop_sequence = ?",
+            (trip_id, stop_id, stop_sequence),
+        )
+        row = cursor.fetchone()
+        conn.close()
+        return StopTime(**dict(row)) if row else None
+
+    def get_stop_by_id(self, stop_id: str) -> Optional[Stop]:
+        conn = sqlite3.connect(self.db_name)
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
+        cursor.execute("SELECT * FROM stops WHERE stop_id = ?", (stop_id,))
+        row = cursor.fetchone()
+        conn.close()
+        return Stop(**dict(row)) if row else None
+
+    def get_transfer_by_id(
+        self, from_stop_id: str, to_stop_id: str
+    ) -> Optional[Transfer]:
+        conn = sqlite3.connect(self.db_name)
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
+        cursor.execute(
+            "SELECT * FROM transfers WHERE from_stop_id = ? AND to_stop_id = ?",
+            (from_stop_id, to_stop_id),
+        )
+        row = cursor.fetchone()
+        conn.close()
+        return Transfer(**dict(row)) if row else None
+
+    def get_trip_by_id(self, trip_id: str) -> Optional[Trip]:
+        conn = sqlite3.connect(self.db_name)
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
+        cursor.execute("SELECT * FROM trips WHERE trip_id = ?", (trip_id,))
+        row = cursor.fetchone()
+        conn.close()
+        return Trip(**dict(row)) if row else None

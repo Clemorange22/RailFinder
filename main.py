@@ -21,6 +21,10 @@ def load_data_db(db: Database, data_path: str):
             db.download_and_populate_gtfs(gtfs_url)
         except Exception as e:
             print(f"Error downloading or populating data from {name}: {e}")
+    print("Creating indexes for GTFS tables...")
+    db.create_gtfs_indexes()
+    print("Indexes created successfully.")
+    print("GTFS data loaded successfully.")
 
 
 # Example usage

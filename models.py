@@ -107,3 +107,19 @@ class Trip:
     trip_bikes_allowed: Optional[int] = None
     ticketing_trip_id: Optional[str] = None
     ticketing_type: Optional[str] = None
+
+
+@dataclass
+class JourneyStep:
+    stop_id: str
+    stop_name: str
+    stop_lat: float
+    stop_lon: float
+    arrival_time: str
+    departure_time: Optional[str] = None
+    trip_id: Optional[str] = None
+    route_id: Optional[str] = None
+    route_short_name: Optional[str] = None
+    route_long_name: Optional[str] = None
+    transfer: bool = False
+    transfer_time: Optional[int] = None  # in seconds or minutes

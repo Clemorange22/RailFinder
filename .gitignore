@@ -1,5 +1,8 @@
 gtfs.db
 gtfs.db-journal
+
+env/
+.vscode/
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
