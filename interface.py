@@ -1,16 +1,19 @@
 import tkinter as tk
 from tkinter import ttk, messagebox
 from tkintermapview import TkinterMapView
-
-
-
-liste_ville = ["Paris", "Lyon", "Limo"]
+import database
+import journey_planner
+from models import StopTime, Stop, Transfer, Trip, JourneyStep
+import sqlite3
+from journey_planner import JourneyPlanner
 
 
 class RoutePlannerApp:
-    def __init__(self, master, liste_ville):
+    def __init__(self, master, db_path="gtfs.db"):
         self.master = master
-        self.liste_ville = liste_ville
+        self.db_path = db_path
+        self.liste_ville = self.get_all_stop_names()
+        print("Exemple de villes chargées :", self.liste_ville[:10])
         self.active_entry = None
         self.loading_label = ttk.Label(master, text="Chargement en cours...", font=("Arial", 14), foreground="blue")
         self.loading_label.place(relx=0.5, rely=0.5, anchor="center")
@@ -148,6 +151,17 @@ class RoutePlannerApp:
         self.route_details_text.config(state=tk.DISABLED)
         self.loading_label.destroy()
 
+    def get_all_stop_names(self):
+        """
+        Retourne la liste de tous les noms de stops présents dans la base de données.
+        """
+        conn = sqlite3.connect(self.db_path)
+        cursor = conn.cursor()
+        cursor.execute("SELECT stop_id, stop_name, stop_lat, stop_lon FROM stops")
+        stops = [Stop(*row) for row in cursor.fetchall()]
+        conn.close()
+        return [stop.stop_name for stop in stops]
+
     def add_stop(self):
         if len(self.intermediate_stops_entries) < 5:
             row_num = len(self.intermediate_stops_entries)
@@ -202,12 +216,8 @@ class RoutePlannerApp:
         self.route_details_text.config(state=tk.DISABLED)
 
         self.map_canvas.delete("all")
-        self.map_canvas.create_text(
-            10,
-            10,
-            anchor="nw",
-            text=f"Carte: {departure} -> {' -> '.join(stops) + ' -> ' if stops else ''}{arrival}",
-        )
+        self.tracage_map()
+        
 
     def auto_completion_proposition(self, event):
         widget = event.widget
@@ -275,9 +285,47 @@ class RoutePlannerApp:
                 self.suggestions_listbox.selection_clear(0, tk.END)
                 self.suggestions_listbox.selection_set(idx + 1)
                 self.suggestions_listbox.activate(idx + 1)
+    
+    # Function to get latitude and longitude by stop name
+    def get_stop_lat_lon_by_name(self, stop_name):
+        """
+        Retourne (lat, lon) pour un stop_name donné, ou None si non trouvé.
+        """
+        conn = sqlite3.connect(self.db_path)
+        cursor = conn.cursor()
+        cursor.execute(
+            "SELECT stop_id, stop_name, stop_lat, stop_lon FROM stops WHERE stop_name = ? COLLATE NOCASE",
+            (stop_name,)
+        )
+        row = cursor.fetchone()
+        conn.close()
+        if row:
+            stop = Stop(*row)
+            return stop.stop_lat, stop.stop_lon
+        else:
+            return None
+        
 
+    def tracage_map(self):
+        self.departure = self.departure_city_entry.get()
+        self.arrival = self.arrival_city_entry.get()
+        self.dep_lat, self.dep_lon = self.get_stop_lat_lon_by_name(self.departure)
+        self.dep_marker = self.map_canvas.set_marker(self.dep_lat, self.dep_lon)
+        self.arr_lat, self.arr_lon = self.get_stop_lat_lon_by_name(self.arrival)
+        self.arrival_icon = tk.PhotoImage(file=r"C:\Users\nbaur\Documents\Travail Noelie\INSA\FIMI 2A\ISN\RailFinder\icon_arrivee.png")
+        self.arr_marker = self.map_canvas.set_marker(self.arr_lat, self.arr_lon, icon=self.arrival_icon)
+        
+        
+        
+
+
+
+"""db = database.Database()
+
+planner = journey_planner.JourneyPlanner(db)  # Création de l'instance
+details = planner.get_journey_details(["Paris", "Lyon"])"""
 
 if __name__ == "__main__":
     root = tk.Tk()
-    app = RoutePlannerApp(root, liste_ville)
+    app = RoutePlannerApp(root)
     root.mainloop()
