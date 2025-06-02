@@ -17,13 +17,20 @@ if __name__ == "__main__":
         "StopPoint:OCETGV INOUI-87773002",
         datetime.datetime.now() + datetime.timedelta(hours=10),
         datetime.timedelta(hours=2),
-    )"""
-    p = jp.journey_search(
+    )"""  # Rennes to Montpellier Saint-Roch
+    """p = jp.journey_search(
         "StopPoint:OCETGV INOUI-87471003",
         "StopPoint:OCETrain TER-87478164",
         datetime.datetime.now(),
         datetime.timedelta(hours=2),
-    )
+    )"""  # Rennes to Dinan
+    p = jp.journey_search(
+        "StopPoint:OCETGV INOUI-87471003",
+        "IDFM:37354",
+        datetime.datetime.now() + datetime.timedelta(hours=10),
+        datetime.timedelta(hours=2),
+    )  # Rennes to Louvres Rivoli
+
     if not p:
         print("No journey found")
         exit(1)
