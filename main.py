@@ -1,3 +1,4 @@
+from math import e
 from database import Database
 from journey_planner import JourneyPlanner
 
@@ -12,30 +13,33 @@ if __name__ == "__main__":
 
     jp = JourneyPlanner(db)
 
-    """p = jp.journey_search(
-        "StopPoint:OCETGV INOUI-87471003",
-        "StopPoint:OCETGV INOUI-87773002",
-        datetime.datetime.now() + datetime.timedelta(hours=10),
-        datetime.timedelta(hours=2),
-    )"""  # Rennes to Montpellier Saint-Roch
-    """p = jp.journey_search(
-        "StopPoint:OCETGV INOUI-87471003",
-        "StopPoint:OCETrain TER-87478164",
-        datetime.datetime.now(),
-        datetime.timedelta(hours=2),
-    )"""  # Rennes to Dinan
+    """print("Rennes to Louvres Rivoli journey search")
     p = jp.journey_search(
         "StopPoint:OCETGV INOUI-87471003",
         "IDFM:37354",
         datetime.datetime.now() + datetime.timedelta(hours=10),
         datetime.timedelta(hours=2),
-    )  # Rennes to Louvres Rivoli
-
+    )
     if not p:
         print("No journey found")
         exit(1)
     details = jp.get_journey_details(p)
     summary = jp.get_journey_summary(details)
     print(summary)
+    print("Montparnasse Bienvenue to Louvre Rivoli journey search")
+    p = jp.journey_search(
+        "IDFM:462996",
+        "IDFM:22092",
+        datetime.datetime.now() + datetime.timedelta(hours=10),
+        datetime.timedelta(hours=2),
+    )
+    if not p:
+        print("No journey found")
+        exit(1)
+    details = jp.get_journey_details(p)
+    summary = jp.get_journey_summary(details)
+    print(summary)"""
+    print("Brest to Bruxelles journey search")
 
-    print("placeholder line for stopping the debugger")
+
+print("placeholder line for stopping the debugger")
