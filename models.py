@@ -111,12 +111,16 @@ class Trip:
 
 @dataclass
 class JourneyStep:
-    stop_id: str
-    stop_name: str
-    stop_lat: float
-    stop_lon: float
+    from_stop_id: str
+    from_stop_name: str
+    from_stop_lat: float
+    from_stop_lon: float
+    to_stop_id: str
+    to_stop_name: str
+    to_stop_lat: float
+    to_stop_lon: float
+    departure_time: str
     arrival_time: str
-    departure_time: Optional[str] = None
     trip_id: Optional[str] = None
     route_id: Optional[str] = None
     route_short_name: Optional[str] = None

@@ -373,19 +373,23 @@ class JourneyPlanner:
             return []
         journey_steps = []
         db = self.db
-        n = len(path)
-        for i, step in enumerate(path):
-            stop_id: str = step[0]
-            time: datetime.datetime = step[1]
-            # Determine trip_id for this step:
-            trip_id = step[2]
+        for i in range(len(path) - 1):
+            from_stop_id = path[i][0]
+            from_time = path[i][1]
+            to_stop_id = path[i + 1][0]
+            to_time = path[i + 1][1]
+            trip_id = path[i][2] if len(path[i]) > 2 else None
 
-            stop = db.get_stop_by_id(stop_id)
-            stop_name = stop.stop_name if stop else ""
-            stop_lat = stop.stop_lat if stop else 0.0
-            stop_lon = stop.stop_lon if stop else 0.0
-            arrival_time = time.strftime("%H:%M:%S")
-            departure_time = None
+            from_stop = db.get_stop_by_id(from_stop_id)
+            to_stop = db.get_stop_by_id(to_stop_id)
+            from_stop_name = from_stop.stop_name if from_stop else ""
+            from_stop_lat = from_stop.stop_lat if from_stop else 0.0
+            from_stop_lon = from_stop.stop_lon if from_stop else 0.0
+            to_stop_name = to_stop.stop_name if to_stop else ""
+            to_stop_lat = to_stop.stop_lat if to_stop else 0.0
+            to_stop_lon = to_stop.stop_lon if to_stop else 0.0
+            departure_time = from_time.strftime("%H:%M:%S")
+            arrival_time = to_time.strftime("%H:%M:%S")
             route_id = None
             route_short_name = None
             route_long_name = None
@@ -397,22 +401,21 @@ class JourneyPlanner:
                 route_short_name = trip.route_short_name if trip else None
                 route = db.get_route_by_id(route_id) if route_id else None
                 route_long_name = route.route_long_name if route else None
-                # Get departure time
-                departure_time = self.get_next_departure(stop_id, trip_id, time)
-
             else:
                 # Transfer: compute transfer time if possible
-                if i > 0:
-                    prev_time: datetime.datetime = path[i - 1][1]
-                    transfer_time = int((time - prev_time).total_seconds())
+                transfer_time = int((to_time - from_time).total_seconds())
             journey_steps.append(
                 JourneyStep(
-                    stop_id=stop_id,
-                    stop_name=stop_name,
-                    stop_lat=stop_lat,
-                    stop_lon=stop_lon,
-                    arrival_time=arrival_time,
+                    from_stop_id=from_stop_id,
+                    from_stop_name=from_stop_name,
+                    from_stop_lat=from_stop_lat,
+                    from_stop_lon=from_stop_lon,
+                    to_stop_id=to_stop_id,
+                    to_stop_name=to_stop_name,
+                    to_stop_lat=to_stop_lat,
+                    to_stop_lon=to_stop_lon,
                     departure_time=departure_time,
+                    arrival_time=arrival_time,
                     trip_id=trip_id,
                     route_id=route_id,
                     route_short_name=route_short_name,
@@ -421,36 +424,32 @@ class JourneyPlanner:
                     transfer_time=transfer_time,
                 )
             )
+        # Remove leading and trailing transfers if any
         while len(journey_steps) > 0 and journey_steps[0].transfer:
-            # Remove leading transfers (if any)
             journey_steps.pop(0)
-
         while len(journey_steps) > 0 and journey_steps[-1].transfer:
-            # Remove trailing transfers (if any)
             journey_steps.pop()
-
         return journey_steps
 
     def get_journey_summary(self, journey_steps: list[JourneyStep]):
         summary = []
         if journey_steps:
-            # Start: use departure from the first ride (not a transfer)
             start_step = journey_steps[0]
             summary.append(
-                f"Start at {start_step.stop_name} ({start_step.stop_id}) at {start_step.departure_time}"
+                f"Start at {start_step.from_stop_name} ({start_step.from_stop_id}) at {start_step.departure_time}"
             )
             for step in journey_steps:
                 if step.transfer:
                     summary.append(
-                        f"Transfer at {step.stop_name} ({step.stop_id}) during {step.transfer_time} seconds"
+                        f"Transfer from {step.from_stop_name} ({step.from_stop_id}) to {step.to_stop_name} ({step.to_stop_id}) during {step.transfer_time} seconds"
                     )
                 else:
                     summary.append(
-                        f"Ride on {step.route_short_name} ({step.route_id}) from {step.stop_name} ({step.stop_id}) "
+                        f"Ride on {step.route_short_name} ({step.route_id}) from {step.from_stop_name} ({step.from_stop_id}) to {step.to_stop_name} ({step.to_stop_id}) "
                         f"departing at {step.departure_time} and arriving at {step.arrival_time}"
                     )
-            # End: use arrival from the last ride (not a transfer)
             end_step = journey_steps[-1]
             summary.append(
-                f"End at {end_step.stop_name} ({end_step.stop_id}) at {end_step.arrival_time}"
+                f"End at {end_step.to_stop_name} ({end_step.to_stop_id}) at {end_step.arrival_time}"
             )
+        return summary
