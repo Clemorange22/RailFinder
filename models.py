@@ -125,5 +125,6 @@ class JourneyStep:
     route_id: Optional[str] = None
     route_short_name: Optional[str] = None
     route_long_name: Optional[str] = None
+    trip_headsign: Optional[str] = None
     transfer: bool = False
-    transfer_time: Optional[int] = None  # in seconds or minutes
+    transfer_time: Optional[int] = None  # in seconds
