@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+from tracemalloc import stop
 from typing import Optional
 
 
@@ -125,6 +126,10 @@ class JourneyStep:
     route_id: Optional[str] = None
     route_short_name: Optional[str] = None
     route_long_name: Optional[str] = None
+    from_stop_sequence: Optional[int] = None
+    to_stop_sequence: Optional[int] = None
     trip_headsign: Optional[str] = None
     transfer: bool = False
     transfer_time: Optional[int] = None  # in seconds
+    agency_id: Optional[str] = None
+    agency_name: Optional[str] = None
