@@ -2,6 +2,7 @@ from ast import parse
 from calendar import c
 import datetime
 import sqlite3
+import time
 
 from database import Database
 from models import StopTime, Stop, Transfer, Trip, JourneyStep
@@ -102,8 +103,8 @@ class JourneyPlanner:
             close_conn = True
         else:
             close_conn = False
-        start_time = departure + time_delta
-        end_time = start_time + datetime.timedelta(hours=1)
+        start_time = departure
+        end_time = departure + time_delta
         weekday = start_time.strftime("%A").lower()
 
         sql = f"""
@@ -213,8 +214,8 @@ class JourneyPlanner:
     def get_stop_pos(
         self,
         stop_id: str,
-        conn: sqlite3.Connection | None,
-        cursor: sqlite3.Cursor | None,
+        conn: sqlite3.Connection | None = None,
+        cursor: sqlite3.Cursor | None = None,
     ) -> tuple:
         if conn is None or cursor is None:
             conn, cursor = self.db.get_connection()
@@ -222,8 +223,13 @@ class JourneyPlanner:
         cursor.execute(sql, (stop_id,))
         return cursor.fetchone()
 
-    def heuristic(self, lat1, lon1, lat2, lon2):
-        return geodistance(lat1, lon1, lat2, lon2) / 60 * 3600
+    def heuristic(self, lat1, lon1, lat2, lon2, ride_number: int) -> float:
+        ASSUMED_SPEED_KMH = 150  # Assumed speed in km/h for the heuristic
+        TRANSFER_PENALTY_MINUTES = 5  # Transfer penalty in minutes
+        return (
+            geodistance(lat1, lon1, lat2, lon2) / ASSUMED_SPEED_KMH * 3600
+            + ride_number * 60 * TRANSFER_PENALTY_MINUTES
+        )
 
     def get_node(self, t: tuple):
         """
@@ -237,7 +243,7 @@ class JourneyPlanner:
         to_stop_id: str,
         departure: datetime.datetime,
         departure_time_delta: datetime.timedelta,
-        max_transfers: int = 5,
+        max_transfers: int = -1,
     ):
         """
         Search for a journey from one stop to another with a maximum number of transfers.
@@ -246,28 +252,34 @@ class JourneyPlanner:
         If the trip_id is None, it means the stop is a transfer and the time is the arrival time at that stop.
         The heuristic is based on the geographical distance between the stops.
         It assumes a straight line distance in km, converted to time in seconds, with a speed of 60 km/h.
-
         """
         conn, cursor = self.db.get_connection()
         visited = set()
         previous = {}
         previous[(from_stop_id, departure)] = (from_stop_id, departure)
         final_lat, final_lon = self.get_stop_pos(to_stop_id, conn, cursor)
-        priority_queue = [(0, from_stop_id, departure)]
+        priority_queue = [
+            (0, from_stop_id, departure, 0)
+        ]  # (cost, stop_id, time, ride_number)
         earliest_arrival = {from_stop_id: departure}
         heapq.heapify(priority_queue)
         found = False
+
+        neighbor_search_window = datetime.timedelta(hours=1)
         while len(priority_queue) > 0 and not found:
             u = heapq.heappop(priority_queue)
             current_stop_id = u[1]
             current_time = u[2]
+            current_ride_number = u[3]
+            if max_transfers >= 0 and current_ride_number > max_transfers + 1:
+                continue
             if current_stop_id == to_stop_id:
                 found = True
             else:
                 for v in self.get_neighbors_stop_times(
                     current_stop_id,
                     current_time,
-                    datetime.timedelta(minutes=30),
+                    neighbor_search_window,
                     limit=-1,
                     conn=conn,
                     cursor=cursor,
@@ -276,7 +288,6 @@ class JourneyPlanner:
                     if (v[0], v_datetime) not in visited and (
                         v_datetime < earliest_arrival.get(v[0], datetime.datetime.max)
                     ):
-
                         vlat = v[3]
                         vlon = v[4]
                         trip_id = v[2]
@@ -287,17 +298,14 @@ class JourneyPlanner:
                             trip_id,
                         )
                         earliest_arrival[v[0]] = v_datetime
-                        h = self.heuristic(vlat, vlon, final_lat, final_lon)
+                        h = self.heuristic(
+                            vlat, vlon, final_lat, final_lon, current_ride_number + 1
+                        )
                         cost = int((v_datetime - departure).total_seconds() + h)
                         heapq.heappush(
                             priority_queue,
-                            (
-                                cost,
-                                v[0],
-                                v_datetime,
-                            ),
+                            (cost, v[0], v_datetime, current_ride_number + 1),
                         )
-
                 for t in self.get_transfers(current_stop_id, conn=conn, cursor=cursor):
                     t_datetime = current_time + datetime.timedelta(seconds=t[2])
                     if (t[1], t_datetime) not in visited and (
@@ -311,7 +319,9 @@ class JourneyPlanner:
                             None,
                         )
                         earliest_arrival[t[1]] = t_datetime
-                        h = self.heuristic(tlat, tlon, final_lat, final_lon)
+                        h = self.heuristic(
+                            tlat, tlon, final_lat, final_lon, current_ride_number
+                        )
                         cost = int((t_datetime - departure).total_seconds() + h)
                         heapq.heappush(
                             priority_queue,
@@ -319,9 +329,9 @@ class JourneyPlanner:
                                 cost,
                                 t[1],
                                 t_datetime,
+                                current_ride_number,  # Do not increment ride number for transfers
                             ),
                         )
-
         conn.close()
         if not found:
             return None
@@ -331,7 +341,6 @@ class JourneyPlanner:
         while previous[self.get_node(current)] != self.get_node(current):
             path.insert(0, current)
             current = previous[self.get_node(current)]
-
         path.insert(0, current)
         return path
 
@@ -438,10 +447,17 @@ class JourneyPlanner:
                     transfer_time=transfer_time,
                 )
             )
-        # Remove leading and trailing transfers if any
-        while len(journey_steps) > 0 and journey_steps[0].transfer:
+        # Remove the first step if its stop name is the same as the second step's stop name
+        while (
+            len(journey_steps) > 1
+            and journey_steps[0].from_stop_name == journey_steps[1].from_stop_name
+        ):
             journey_steps.pop(0)
-        while len(journey_steps) > 0 and journey_steps[-1].transfer:
+        # Remove the last step if its stop name is the same as the second to last step's stop name
+        while (
+            len(journey_steps) > 1
+            and journey_steps[-1].to_stop_name == journey_steps[-2].to_stop_name
+        ):
             journey_steps.pop()
         return journey_steps
 
