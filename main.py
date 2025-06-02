@@ -40,6 +40,19 @@ if __name__ == "__main__":
     summary = jp.get_journey_summary(details)
     print(summary)"""
     print("Brest to Bruxelles journey search")
-
+    p = jp.journey_search(
+        "StopArea:OCE87474007",
+        "StopArea:OCE88140010",
+        datetime.datetime.now() + datetime.timedelta(hours=10),
+        datetime.timedelta(hours=2),
+    )
+    if not p:
+        print("No journey found")
+        exit(1)
+    details = jp.get_journey_details(p)
+    summary = jp.get_journey_summary(details)
+    geometry = jp.get_journey_geometry(details)
+    print(summary)
+    print(geometry)
 
 print("placeholder line for stopping the debugger")
