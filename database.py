@@ -6,6 +6,8 @@ import csv
 import os
 from models import Agency, Route, Shape, StopTime, Stop, Transfer, Trip
 from typing import Optional
+from utils import geodistance_meters
+import json
 
 
 class Database:
@@ -246,7 +248,6 @@ class Database:
         conn = sqlite3.connect(self.db_name)
         cursor = conn.cursor()
 
-        print("Creating GTFS indexes...")
         cursor.execute(
             "CREATE INDEX IF NOT EXISTS idx_stop_times_stop_id_arrival ON stop_times (stop_id, arrival_time)"
         )
@@ -284,6 +285,72 @@ class Database:
 
         conn.commit()
         conn.close()
+
+    def add_nearby_transfers(self, max_distance_m=100, transfer_time_sec=120):
+        """
+        Add transfers between all stops within max_distance_m meters of each other,
+        except if a transfer already exists between the stops or if both stop_id starts with 'IDFM'.
+        """
+
+        conn, cursor = self.get_connection()
+        cursor.execute("SELECT stop_id, stop_lat, stop_lon FROM stops")
+        stops = cursor.fetchall()
+        # Build a set of all existing transfer pairs
+        cursor.execute("SELECT from_stop_id, to_stop_id FROM transfers")
+        existing_transfers = set((row[0], row[1]) for row in cursor.fetchall())
+
+        for i, (stop_id1, lat1, lon1) in enumerate(stops):
+            for stop_id2, lat2, lon2 in stops[i + 1 :]:
+                if stop_id1 == stop_id2:
+                    continue
+                # Skip if both stop IDs start with 'IDFM'
+                if stop_id1.startswith("IDFM") and stop_id2.startswith("IDFM"):
+                    continue
+                # Skip if transfer already exists in either direction
+                if (stop_id1, stop_id2) in existing_transfers or (
+                    stop_id2,
+                    stop_id1,
+                ) in existing_transfers:
+                    continue
+                dist = geodistance_meters(lat1, lon1, lat2, lon2)
+                if dist <= max_distance_m:
+                    # Insert transfer in both directions
+                    cursor.execute(
+                        "INSERT OR IGNORE INTO transfers (from_stop_id, to_stop_id, transfer_type, min_transfer_time) VALUES (?, ?, ?, ?)",
+                        (stop_id1, stop_id2, 2, transfer_time_sec),
+                    )
+                    cursor.execute(
+                        "INSERT OR IGNORE INTO transfers (from_stop_id, to_stop_id, transfer_type, min_transfer_time) VALUES (?, ?, ?, ?)",
+                        (stop_id2, stop_id1, 2, transfer_time_sec),
+                    )
+        conn.commit()
+        conn.close()
+        print(
+            f"Nearby transfers (<= {max_distance_m}m) added, excluding IDFM stops and existing transfers."
+        )
+
+    def load_and_prepare_data(self, data_path: str):
+        """
+        Load GTFS data from sources in data_path, create tables, indexes, and generate nearby transfers.
+        """
+        self.reset_database()
+        self.create_gtfs_tables()
+
+        with open(data_path, "r") as file:
+            data_sources = json.loads(file.read())
+
+        for name, gtfs_url in data_sources.items():
+            print(f"Downloading GTFS data from {name}: {gtfs_url}")
+            try:
+                self.download_and_populate_gtfs(gtfs_url)
+            except Exception as e:
+                print(f"Error downloading or populating data from {name}: {e}")
+        print("Creating indexes for GTFS tables...")
+        self.create_gtfs_indexes()
+        print("Indexes created successfully.")
+        print("Generating nearby transfers...")
+        self.add_nearby_transfers(max_distance_m=100, transfer_time_sec=120)
+        print("GTFS data loaded and transfers generated successfully.")
 
     def get_agency_by_id(self, agency_id: str) -> Optional[Agency]:
         conn = sqlite3.connect(self.db_name)
