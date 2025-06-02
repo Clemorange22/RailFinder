@@ -112,8 +112,7 @@ class JourneyPlanner:
             MIN(st2.arrival_time) AS earliest_arrival,
             trips.trip_id,
             stops.stop_lat,
-            stops.stop_lon,
-            st2.trip_id
+            stops.stop_lon
         FROM stop_times AS st1
         JOIN stop_times AS st2 
             ON st1.trip_id = st2.trip_id 
@@ -191,12 +190,14 @@ class JourneyPlanner:
             conn.close()
         return transfers
 
-    def parse_gtfs_time(self, time_str: str) -> datetime.datetime:
+    def parse_gtfs_time(
+        self, date_reference: datetime.datetime, time_str: str
+    ) -> datetime.datetime:
         """
         Parse a GTFS time string (HH:MM:SS) into a datetime object.
         A GTFS time string does not include a date, so we assume the date is today, unless the hour is more than 23.
         """
-        today = datetime.datetime.now().date()
+        today = date_reference.date()
         time_parts = time_str.split(":")
         if len(time_parts) == 3:
             hour, minute, second = map(int, time_parts)
@@ -240,6 +241,12 @@ class JourneyPlanner:
     ):
         """
         Search for a journey from one stop to another with a maximum number of transfers.
+        This uses a modified A* algorithm to find the shortest path based on time since the departure time.
+        The path is represented as a list of tuples (stop_id, time, optional trip_id).
+        If the trip_id is None, it means the stop is a transfer and the time is the arrival time at that stop.
+        The heuristic is based on the geographical distance between the stops.
+        It assumes a straight line distance in km, converted to time in seconds, with a speed of 60 km/h.
+
         """
         conn, cursor = self.db.get_connection()
         visited = set()
@@ -265,14 +272,14 @@ class JourneyPlanner:
                     conn=conn,
                     cursor=cursor,
                 ):
-                    v_datetime = self.parse_gtfs_time(v[1])
+                    v_datetime = self.parse_gtfs_time(current_time, v[1])
                     if (v[0], v_datetime) not in visited and (
                         v_datetime < earliest_arrival.get(v[0], datetime.datetime.max)
                     ):
 
                         vlat = v[3]
                         vlon = v[4]
-                        trip_id = v[5]
+                        trip_id = v[2]
                         visited.add((v[0], v_datetime))
                         previous[(v[0], v_datetime)] = (
                             current_stop_id,
@@ -281,11 +288,11 @@ class JourneyPlanner:
                         )
                         earliest_arrival[v[0]] = v_datetime
                         h = self.heuristic(vlat, vlon, final_lat, final_lon)
-
+                        cost = int((v_datetime - departure).total_seconds() + h)
                         heapq.heappush(
                             priority_queue,
                             (
-                                round((v_datetime - departure).total_seconds() + h),
+                                cost,
                                 v[0],
                                 v_datetime,
                             ),
@@ -305,10 +312,11 @@ class JourneyPlanner:
                         )
                         earliest_arrival[t[1]] = t_datetime
                         h = self.heuristic(tlat, tlon, final_lat, final_lon)
+                        cost = int((t_datetime - departure).total_seconds() + h)
                         heapq.heappush(
                             priority_queue,
                             (
-                                round((t_datetime - departure).total_seconds() + h),
+                                cost,
                                 t[1],
                                 t_datetime,
                             ),
@@ -324,14 +332,7 @@ class JourneyPlanner:
             path.insert(0, current)
             current = previous[self.get_node(current)]
 
-        # Fix: ensure the first step has the correct trip_id
-        first = previous[self.get_node(current)]
-        # If the first step is missing trip_id, infer it from the next step
-        if len(first) == 2 and len(path) > 0 and len(path[0]) > 2:
-            first = (first[0], first[1], path[0][2])
-        elif len(first) == 2:
-            first = (first[0], first[1], None)
-        path.insert(0, first)
+        path.insert(0, current)
         return path
 
     def get_next_departure(
@@ -368,6 +369,7 @@ class JourneyPlanner:
         Each step in the path is a tuple of (stop_id, time, optional trip_id).
         The trip_id is the id of the trip that departs from this stop (i.e., the trip after this stop),
         except for the last stop, which has trip_id=None unless it's a transfer.
+        The times in the path are arrival times; departure_time should be fetched from the database.
         """
         if not path or len(path) < 2:
             return []
@@ -375,9 +377,9 @@ class JourneyPlanner:
         db = self.db
         for i in range(len(path) - 1):
             from_stop_id = path[i][0]
-            from_time = path[i][1]
+            from_arrival_time = path[i][1]
             to_stop_id = path[i + 1][0]
-            to_time = path[i + 1][1]
+            to_arrival_time = path[i + 1][1]
             trip_id = path[i][2] if len(path[i]) > 2 else None
 
             from_stop = db.get_stop_by_id(from_stop_id)
@@ -388,22 +390,33 @@ class JourneyPlanner:
             to_stop_name = to_stop.stop_name if to_stop else ""
             to_stop_lat = to_stop.stop_lat if to_stop else 0.0
             to_stop_lon = to_stop.stop_lon if to_stop else 0.0
-            departure_time = from_time.strftime("%H:%M:%S")
-            arrival_time = to_time.strftime("%H:%M:%S")
+            arrival_time = to_arrival_time.strftime("%H:%M:%S")
             route_id = None
             route_short_name = None
             route_long_name = None
+            trip_headsign = None
             transfer = trip_id is None
             transfer_time = None
+
             if trip_id:
                 trip = db.get_trip_by_id(trip_id)
                 route_id = trip.route_id if trip else None
                 route_short_name = trip.route_short_name if trip else None
                 route = db.get_route_by_id(route_id) if route_id else None
                 route_long_name = route.route_long_name if route else None
+                trip_headsign = trip.trip_headsign if trip else None
+                # Get departure time from the database (since path times are arrivals)
+                departure_time = self.get_next_departure(
+                    from_stop_id, trip_id, from_arrival_time
+                )
+                if departure_time is None:
+                    departure_time = from_arrival_time.strftime("%H:%M:%S")
             else:
                 # Transfer: compute transfer time if possible
-                transfer_time = int((to_time - from_time).total_seconds())
+                transfer_time = int(
+                    (to_arrival_time - from_arrival_time).total_seconds()
+                )
+                departure_time = from_arrival_time.strftime("%H:%M:%S")
             journey_steps.append(
                 JourneyStep(
                     from_stop_id=from_stop_id,
@@ -420,6 +433,7 @@ class JourneyPlanner:
                     route_id=route_id,
                     route_short_name=route_short_name,
                     route_long_name=route_long_name,
+                    trip_headsign=trip_headsign,
                     transfer=transfer,
                     transfer_time=transfer_time,
                 )
@@ -444,12 +458,16 @@ class JourneyPlanner:
                         f"Transfer from {step.from_stop_name} ({step.from_stop_id}) to {step.to_stop_name} ({step.to_stop_id}) during {step.transfer_time} seconds"
                     )
                 else:
+                    route_name = (
+                        step.route_short_name or step.route_long_name or "Unknown Route"
+                    )
                     summary.append(
-                        f"Ride on {step.route_short_name} ({step.route_id}) from {step.from_stop_name} ({step.from_stop_id}) to {step.to_stop_name} ({step.to_stop_id}) "
-                        f"departing at {step.departure_time} and arriving at {step.arrival_time}"
+                        f"---------------------------------------------------------------------\n"
+                        f"Ride on {route_name} ({step.route_id}) from {step.from_stop_name} ({step.from_stop_id}) to {step.to_stop_name} ({step.to_stop_id}).\n"
+                        f"Trip {step.trip_headsign}, departing at {step.departure_time} and arriving at {step.arrival_time}"
                     )
             end_step = journey_steps[-1]
             summary.append(
                 f"End at {end_step.to_stop_name} ({end_step.to_stop_id}) at {end_step.arrival_time}"
             )
-        return summary
+        return "\n".join(summary) if summary else "No journey steps available."
