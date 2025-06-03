@@ -18,6 +18,7 @@ class RoutePlannerApp:
         self.db = Database(self.db_path)
         #self.db.load_and_prepare_data()
         self.planner = JourneyPlanner(self.db)
+        self.journey_geometry = []
         print("Exemple de villes chargées :", self.liste_ville[:10])
         self.active_entry = None
         self.loading_label = ttk.Label(master, text="Chargement en cours...", font=("Arial", 14), foreground="blue")
@@ -266,6 +267,7 @@ class RoutePlannerApp:
                 if line:
                     details += "\n\nTracé du trajet:\n"
                     details += str(line)
+                self.journey_geometry = self.planner.get_journey_geometry(journey_steps)
         self.route_details_text.insert(tk.END, details)
         self.route_details_text.config(state=tk.DISABLED)
 
@@ -361,15 +363,17 @@ class RoutePlannerApp:
         
 
     def tracage_map(self):
-        self.departure = self.departure_city_entry.get()
-        self.arrival = self.arrival_city_entry.get()
-        self.dep_lat, self.dep_lon = self.get_stop_lat_lon_by_name(self.departure)
-        self.dep_marker = self.map_canvas.set_marker(self.dep_lat, self.dep_lon)
-        self.arr_lat, self.arr_lon = self.get_stop_lat_lon_by_name(self.arrival)
-        #self.arrival_icon = tk.PhotoImage(file=r"C:\Users\nbaur\Documents\Travail Noelie\INSA\FIMI 2A\ISN\RailFinder\icon_arrivee.png")
-        self.arr_marker = self.map_canvas.set_marker(self.arr_lat, self.arr_lon, icon=self.arrival_icon)
-        
-        
+        # """
+        # self.departure = self.departure_city_entry.get()
+        # self.arrival = self.arrival_city_entry.get()
+        # self.dep_lat, self.dep_lon = self.get_stop_lat_lon_by_name(self.departure)
+        # self.dep_marker = self.map_canvas.set_marker(self.dep_lat, self.dep_lon)
+        # self.arr_lat, self.arr_lon = self.get_stop_lat_lon_by_name(self.arrival)
+        # self.arrival_icon = tk.PhotoImage(file=r"C:\Users\nbaur\Documents\Travail Noelie\INSA\FIMI 2A\ISN\RailFinder\icon_arrivee.png")
+        # self.arr_marker = self.map_canvas.set_marker(self.arr_lat, self.arr_lon, icon=self.arrival_icon)
+        # """
+        if len(self.journey_geometry) > 0:
+            path_1 = self.map_canvas.set_path(self.journey_geometry)
         
     # Ajoute cette méthode dans ta classe RoutePlannerApp
     def get_stop_id_by_name(self, stop_name):
@@ -386,10 +390,6 @@ class RoutePlannerApp:
         conn.close()
         return row[0] if row else None
 
-"""db = database.Database()
-
-planner = journey_planner.JourneyPlanner(db)  # Création de l'instance
-details = planner.get_journey_details(["Paris", "Lyon"])"""
 
 if __name__ == "__main__":
     root = tk.Tk()
