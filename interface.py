@@ -1,8 +1,8 @@
 import tkinter as tk
 from tkinter import ttk, messagebox
 from tkintermapview import TkinterMapView
-import database
-import journey_planner
+from database import Database
+
 from models import StopTime, Stop, Transfer, Trip, JourneyStep
 import sqlite3
 from journey_planner import JourneyPlanner
@@ -15,7 +15,9 @@ class RoutePlannerApp:
         self.master = master
         self.db_path = db_path
         self.liste_ville = self.get_all_stop_names()
-        self.planner = JourneyPlanner(self.db_path)
+        self.db = Database(self.db_path)
+        #self.db.load_and_prepare_data()
+        self.planner = JourneyPlanner(self.db)
         print("Exemple de villes chargées :", self.liste_ville[:10])
         self.active_entry = None
         self.loading_label = ttk.Label(master, text="Chargement en cours...", font=("Arial", 14), foreground="blue")
@@ -218,13 +220,16 @@ class RoutePlannerApp:
         date_str = self.departure_date_entry.get()
         time_str = self.departure_time_entry.get()
         try:
-            departure_datetime = datetime.datetime.strptime(
+            # On suppose que l'utilisateur saisit la date/heure en heure locale France
+            departure_datetime_local = datetime.datetime.strptime(
                 f"{date_str} {time_str}", "%d/%m/%Y %H:%M"
             )
-            # Conversion en UTC (en supposant que l'entrée est en heure locale France)
+            # Ajout : conversion naïve locale -> UTC naïf
             local_tz = pytz.timezone("Europe/Paris")
-            departure_datetime = local_tz.localize(departure_datetime)
-            departure_datetime_utc = departure_datetime.astimezone(pytz.utc)
+            aware_local = local_tz.localize(departure_datetime_local)
+            aware_utc = aware_local.astimezone(pytz.utc)
+            # On retire le tzinfo pour obtenir un datetime naïf en UTC
+            departure_datetime_utc = aware_utc.replace(tzinfo=None)
         except ValueError:
             messagebox.showerror(
                 "Erreur", "Veuillez entrer une date et une heure de départ valides (JJ/MM/AAAA HH:MM)."
@@ -245,14 +250,22 @@ class RoutePlannerApp:
         details = f"Calcul de l'itinéraire:\n"
         details += f"Départ: {departure}:{from_stop_id}\n"
         details += f"Arrivée: {arrival}:{to_stop_id}\n"
-        details += f"Date et heure de départ (locale): {departure_datetime}\n"
+        details += f"Date et heure de départ (locale): {aware_local}\n"
         details += f"Date et heure de départ (UTC): {departure_datetime_utc}\n"
         if stops:
             details += f"Étapes: {', '.join(stops)}\n"
         details += f"Type de trains: {train_type}\n"
         details += f"Préférence: {preference}\n\n"
-        details += "--- (Logique de calcul et résultats réels à implémenter) ---"
-        details+= self.planner.journey_search(from_stop_id,to_stop_id,departure_datetime_utc,datetime.timedelta(1))
+        if from_stop_id and to_stop_id:
+            p = self.planner.journey_search(from_stop_id,to_stop_id,departure_datetime_utc)
+            if p is not None:
+                journey_steps = self.planner.get_journey_details(p)
+                summary = self.planner.get_journey_summary(journey_steps)
+                details += summary
+                line = self.planner.get_journey_geometry(journey_steps)
+                if line:
+                    details += "\n\nTracé du trajet:\n"
+                    details += str(line)
         self.route_details_text.insert(tk.END, details)
         self.route_details_text.config(state=tk.DISABLED)
 
