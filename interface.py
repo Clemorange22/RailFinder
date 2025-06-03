@@ -178,7 +178,7 @@ class RoutePlannerApp:
         cursor.execute("SELECT stop_id, stop_name, stop_lat, stop_lon FROM stops")
         stops = [Stop(*row) for row in cursor.fetchall()]
         conn.close()
-        return [stop.stop_name for stop in stops]
+        return sorted(set(stop.stop_name for stop in stops if stop.stop_name))
 
     def add_stop(self):
         if len(self.intermediate_stops_entries) < 5:
