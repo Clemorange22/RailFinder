@@ -150,6 +150,14 @@ class RoutePlannerApp:
         )
         self.route_details_text.config(state=tk.DISABLED)
         self.loading_label.destroy()
+        # Chargement label + progressbar
+        self.loading_frame = ttk.Frame(master, relief="raised", padding=15)
+        self.loading_label = ttk.Label(self.loading_frame, text="🔄 Calcul de l'itinéraire...", font=("Arial", 14, "bold"))
+        self.loading_bar = ttk.Progressbar(self.loading_frame, mode="indeterminate", length=200)
+
+        self.loading_label.pack(pady=(0, 10))
+        self.loading_bar.pack()
+
 
     def get_all_stop_names(self):
         """
@@ -188,6 +196,12 @@ class RoutePlannerApp:
             )
 
     def calculate_route(self):
+        self.loading_frame.place(relx=0.5, rely=0.5, anchor="center")
+        self.loading_bar.start(10)  # Démarrer la barre de chargement
+        self.master.update_idletasks()
+        self.departure_city_entry.config(state="disabled")
+        self.arrival_city_entry.config(state="disabled")
+
         departure = self.departure_city_entry.get()
         arrival = self.arrival_city_entry.get()
         stops = [
@@ -217,6 +231,14 @@ class RoutePlannerApp:
 
         self.map_canvas.delete("all")
         self.tracage_map()
+        # Simuler le calcul de l'itinéraire
+        self.loading_bar.stop()
+        self.loading_frame.place_forget()
+
+        # Réactiver les champs de saisie
+        self.departure_city_entry.config(state="normal")
+        self.arrival_city_entry.config(state="normal")
+
         
 
     def auto_completion_proposition(self, event):
