@@ -1,10 +1,11 @@
 from database import Database
 
 def main():
-    data_path = "data_sources.json"  # 确保这个文件在当前目录
+    data_path = "data_sources.json"  
     db = Database()
     db.load_and_prepare_data(data_path)
-    print("✅ 初始化完成：GTFS 数据已成功载入数据库！")
+    print("✅ Database initialized and data loaded successfully.")
 
 if __name__ == "__main__":
     main()
+
