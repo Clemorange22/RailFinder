@@ -6,6 +6,8 @@ import journey_planner
 from models import StopTime, Stop, Transfer, Trip, JourneyStep
 import sqlite3
 from journey_planner import JourneyPlanner
+import datetime
+import pytz  # Ajoute cette importation en haut du fichier
 
 
 class RoutePlannerApp:
@@ -13,6 +15,7 @@ class RoutePlannerApp:
         self.master = master
         self.db_path = db_path
         self.liste_ville = self.get_all_stop_names()
+        self.planner = JourneyPlanner(self.db_path)
         print("Exemple de villes chargées :", self.liste_ville[:10])
         self.active_entry = None
         self.loading_label = ttk.Label(master, text="Chargement en cours...", font=("Arial", 14), foreground="blue")
@@ -60,28 +63,43 @@ class RoutePlannerApp:
         self.arrival_city_entry.bind("<KeyRelease>", self.auto_completion_proposition)
         self.arrival_city_entry.bind("<Down>", self.focus_suggestions_listbox)
 
+        # Date & Time of Departure
+        ttk.Label(control_frame, text="Date de départ (JJ/MM/AAAA) :").grid(
+            row=2, column=0, padx=5, pady=5, sticky="w"
+        )
+        self.departure_date_entry = ttk.Entry(control_frame, width=15)
+        self.departure_date_entry.grid(row=2, column=1, padx=5, pady=5, sticky="w")
+        self.departure_date_entry.insert(0, datetime.date.today().strftime("%d/%m/%Y"))
+
+        ttk.Label(control_frame, text="Heure de départ (HH:MM) :").grid(
+            row=3, column=0, padx=5, pady=5, sticky="w"
+        )
+        self.departure_time_entry = ttk.Entry(control_frame, width=10)
+        self.departure_time_entry.grid(row=3, column=1, padx=5, pady=5, sticky="w")
+        self.departure_time_entry.insert(0, "08:00")
+
         # Intermediate Stops
         ttk.Label(control_frame, text="Étapes :").grid(
-            row=2, column=0, columnspan=2, padx=5, pady=5, sticky="w"
+            row=4, column=0, columnspan=2, padx=5, pady=5, sticky="w"
         )
         self.stops_frame = ttk.Frame(control_frame)
         self.stops_frame.grid(
-            row=3, column=0, columnspan=2, padx=5, pady=5, sticky="ew"
+            row=5, column=0, columnspan=2, padx=5, pady=5, sticky="ew"
         )
         self.intermediate_stops_entries = []
         self.add_stop_button = ttk.Button(
             control_frame, text="Ajouter une étape", command=self.add_stop
         )
-        self.add_stop_button.grid(row=4, column=0, padx=5, pady=5, sticky="w")
+        self.add_stop_button.grid(row=6, column=0, padx=5, pady=5, sticky="w")
         self.add_stop_button = ttk.Entry(control_frame, width=30)
         self.remove_stop_button = ttk.Button(
             control_frame, text="Supprimer la dernière étape", command=self.remove_stop
         )
-        self.remove_stop_button.grid(row=4, column=1, padx=5, pady=5, sticky="e")
+        self.remove_stop_button.grid(row=6, column=1, padx=5, pady=5, sticky="e")
 
         # Train Type
         ttk.Label(control_frame, text="Type de trains:").grid(
-            row=5, column=0, columnspan=2, padx=5, pady=10, sticky="w"
+            row=7, column=0, columnspan=2, padx=5, pady=10, sticky="w"
         )
         self.train_type_var = tk.StringVar(value="TGV + TER")
         ttk.Radiobutton(
@@ -89,23 +107,23 @@ class RoutePlannerApp:
             text="TGV uniquement",
             variable=self.train_type_var,
             value="TGV",
-        ).grid(row=6, column=0, columnspan=2, sticky="w", padx=10)
+        ).grid(row=8, column=0, columnspan=2, sticky="w", padx=10)
         ttk.Radiobutton(
             control_frame,
             text="TER uniquement",
             variable=self.train_type_var,
             value="TER",
-        ).grid(row=7, column=0, columnspan=2, sticky="w", padx=10)
+        ).grid(row=9, column=0, columnspan=2, sticky="w", padx=10)
         ttk.Radiobutton(
             control_frame,
             text="TGV + TER",
             variable=self.train_type_var,
             value="TGV + TER",
-        ).grid(row=8, column=0, columnspan=2, sticky="w", padx=10)
+        ).grid(row=10, column=0, columnspan=2, sticky="w", padx=10)
 
         # Route Preference
         ttk.Label(control_frame, text="Préférence de trajet:").grid(
-            row=9, column=0, columnspan=2, padx=5, pady=10, sticky="w"
+            row=11, column=0, columnspan=2, padx=5, pady=10, sticky="w"
         )
         self.route_preference_var = tk.StringVar(value="Le plus rapide")
         ttk.Radiobutton(
@@ -113,19 +131,19 @@ class RoutePlannerApp:
             text="Le plus rapide (durée)",
             variable=self.route_preference_var,
             value="Le plus rapide",
-        ).grid(row=10, column=0, columnspan=2, sticky="w", padx=10)
+        ).grid(row=12, column=0, columnspan=2, sticky="w", padx=10)
         ttk.Radiobutton(
             control_frame,
             text="Moins de correspondances",
             variable=self.route_preference_var,
             value="Moins de correspondances",
-        ).grid(row=11, column=0, columnspan=2, sticky="w", padx=10)
+        ).grid(row=13, column=0, columnspan=2, sticky="w", padx=10)
 
         # Calculate Button
         calculate_button = ttk.Button(
             control_frame, text="Calculer l'itinéraire", command=self.calculate_route
         )
-        calculate_button.grid(row=12, column=0, columnspan=2, padx=5, pady=20)
+        calculate_button.grid(row=14, column=0, columnspan=2, padx=5, pady=20)
 
         # Display Frame Widgets
         
@@ -196,6 +214,24 @@ class RoutePlannerApp:
         train_type = self.train_type_var.get()
         preference = self.route_preference_var.get()
 
+        # --- Ajout récupération date et heure ---
+        date_str = self.departure_date_entry.get()
+        time_str = self.departure_time_entry.get()
+        try:
+            departure_datetime = datetime.datetime.strptime(
+                f"{date_str} {time_str}", "%d/%m/%Y %H:%M"
+            )
+            # Conversion en UTC (en supposant que l'entrée est en heure locale France)
+            local_tz = pytz.timezone("Europe/Paris")
+            departure_datetime = local_tz.localize(departure_datetime)
+            departure_datetime_utc = departure_datetime.astimezone(pytz.utc)
+        except ValueError:
+            messagebox.showerror(
+                "Erreur", "Veuillez entrer une date et une heure de départ valides (JJ/MM/AAAA HH:MM)."
+            )
+            return
+        # ----------------------------------------
+
         if not departure or not arrival:
             messagebox.showerror(
                 "Erreur", "Veuillez entrer une ville de départ et une ville d'arrivée."
@@ -204,14 +240,19 @@ class RoutePlannerApp:
 
         self.route_details_text.config(state=tk.NORMAL)
         self.route_details_text.delete(1.0, tk.END)
+        from_stop_id = self.get_stop_id_by_name(departure)
+        to_stop_id = self.get_stop_id_by_name(arrival)
         details = f"Calcul de l'itinéraire:\n"
-        details += f"Départ: {departure}\n"
-        details += f"Arrivée: {arrival}\n"
+        details += f"Départ: {departure}:{from_stop_id}\n"
+        details += f"Arrivée: {arrival}:{to_stop_id}\n"
+        details += f"Date et heure de départ (locale): {departure_datetime}\n"
+        details += f"Date et heure de départ (UTC): {departure_datetime_utc}\n"
         if stops:
             details += f"Étapes: {', '.join(stops)}\n"
         details += f"Type de trains: {train_type}\n"
         details += f"Préférence: {preference}\n\n"
         details += "--- (Logique de calcul et résultats réels à implémenter) ---"
+        details+= self.planner.journey_search(from_stop_id,to_stop_id,departure_datetime_utc,datetime.timedelta(1))
         self.route_details_text.insert(tk.END, details)
         self.route_details_text.config(state=tk.DISABLED)
 
@@ -312,13 +353,25 @@ class RoutePlannerApp:
         self.dep_lat, self.dep_lon = self.get_stop_lat_lon_by_name(self.departure)
         self.dep_marker = self.map_canvas.set_marker(self.dep_lat, self.dep_lon)
         self.arr_lat, self.arr_lon = self.get_stop_lat_lon_by_name(self.arrival)
-        self.arrival_icon = tk.PhotoImage(file=r"C:\Users\nbaur\Documents\Travail Noelie\INSA\FIMI 2A\ISN\RailFinder\icon_arrivee.png")
+        #self.arrival_icon = tk.PhotoImage(file=r"C:\Users\nbaur\Documents\Travail Noelie\INSA\FIMI 2A\ISN\RailFinder\icon_arrivee.png")
         self.arr_marker = self.map_canvas.set_marker(self.arr_lat, self.arr_lon, icon=self.arrival_icon)
         
         
         
-
-
+    # Ajoute cette méthode dans ta classe RoutePlannerApp
+    def get_stop_id_by_name(self, stop_name):
+        """
+        Retourne le stop_id pour un stop_name donné, ou None si non trouvé.
+        """
+        conn = sqlite3.connect(self.db_path)
+        cursor = conn.cursor()
+        cursor.execute(
+            "SELECT stop_id FROM stops WHERE stop_name = ? COLLATE NOCASE",
+            (stop_name,)
+        )
+        row = cursor.fetchone()
+        conn.close()
+        return row[0] if row else None
 
 """db = database.Database()
 
