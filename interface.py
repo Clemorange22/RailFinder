@@ -7,6 +7,7 @@ from models import StopTime, Stop, Transfer, Trip, JourneyStep
 import sqlite3
 from journey_planner import JourneyPlanner
 import datetime
+import os
 import pytz  # Ajoute cette importation en haut du fichier
 
 
@@ -385,19 +386,26 @@ class RoutePlannerApp:
         
 
     def tracage_map(self):
-        # """
-        # self.departure = self.departure_city_entry.get()
-        # self.arrival = self.arrival_city_entry.get()
-        # self.dep_lat, self.dep_lon = self.get_stop_lat_lon_by_name(self.departure)
-        # self.dep_marker = self.map_canvas.set_marker(self.dep_lat, self.dep_lon)
-        # self.arr_lat, self.arr_lon = self.get_stop_lat_lon_by_name(self.arrival)
-        # self.arrival_icon = tk.PhotoImage(file=r"C:\Users\nbaur\Documents\Travail Noelie\INSA\FIMI 2A\ISN\RailFinder\icon_arrivee.png")
-        # self.arr_marker = self.map_canvas.set_marker(self.arr_lat, self.arr_lon, icon=self.arrival_icon)
-        # """
+        # Efface les anciens marqueurs
+        self.map_canvas.delete_all_marker()
+        
+        departure = self.departure_city_entry.get()
+        arrival = self.arrival_city_entry.get()
+        dep_coords = self.get_stop_lat_lon_by_name(departure)
+        arr_coords = self.get_stop_lat_lon_by_name(arrival)
+
+        if dep_coords:
+            dep_lat, dep_lon = dep_coords
+            self.map_canvas.set_marker(dep_lat, dep_lon)
+        if arr_coords:
+            arr_lat, arr_lon = arr_coords
+            icon_path = tk.PhotoImage(file=os.path.join(os.path.dirname(__file__), "icon_arrivee.png"))
+            self.map_canvas.set_marker(arr_lat, arr_lon, icon=icon_path)
+        
         if len(self.journey_geometry) > 0:
             path_1 = self.map_canvas.set_path(self.journey_geometry)
         
-    # Ajoute cette méthode dans ta classe RoutePlannerApp
+    
     def get_stop_id_by_name(self, stop_name):
         """
         Retourne le stop_id pour un stop_name donné, ou None si non trouvé.
