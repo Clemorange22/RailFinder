@@ -346,16 +346,21 @@ class RoutePlannerApp:
             self.suggestions_listbox.selection_set(0)
             self.suggestions_listbox.activate(0)
 
-    def navigate_up(self, event):
+    def navigate_up(self, _=None):
         cur = self.suggestions_listbox.curselection()
         if cur:
             idx = cur[0]
             if idx > 0:
                 self.suggestions_listbox.selection_clear(0, tk.END)
                 self.suggestions_listbox.selection_set(idx - 1)
-                self.suggestions_listbox.activate(idx - 1)
+                self.suggestions_listbox.see(idx - 1)
+        else:
+            if self.suggestions_listbox.size() > 0:
+                self.suggestions_listbox.selection_set(0)
+                self.suggestions_listbox.see(0)
+        self.suggestions_listbox.focus_set()
 
-    def navigate_down(self, event):
+    def navigate_down(self, _=None):
         cur = self.suggestions_listbox.curselection()
         size = self.suggestions_listbox.size()
         if cur:
@@ -363,7 +368,13 @@ class RoutePlannerApp:
             if idx < size - 1:
                 self.suggestions_listbox.selection_clear(0, tk.END)
                 self.suggestions_listbox.selection_set(idx + 1)
-                self.suggestions_listbox.activate(idx + 1)
+                self.suggestions_listbox.see(idx + 1)
+        else:
+            if size > 0:
+                self.suggestions_listbox.selection_set(0)
+                self.suggestions_listbox.see(0)
+        self.suggestions_listbox.focus_set()
+    
     
     # Function to get latitude and longitude by stop name
     def get_stop_lat_lon_by_name(self, stop_name):
