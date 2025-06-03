@@ -243,7 +243,6 @@ class JourneyPlanner:
         from_stop_id: str,
         to_stop_id: str,
         departure: datetime.datetime,
-        departure_time_delta: datetime.timedelta,
         max_transfers: int = -1,
     ):
         """
