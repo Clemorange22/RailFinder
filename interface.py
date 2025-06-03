@@ -395,10 +395,7 @@ class RoutePlannerApp:
         conn.close()
         return row[0] if row else None
 
-"""db = database.Database()
 
-planner = journey_planner.JourneyPlanner(db)  # Création de l'instance
-details = planner.get_journey_details(["Paris", "Lyon"])"""
 
 if __name__ == "__main__":
     root = tk.Tk()
