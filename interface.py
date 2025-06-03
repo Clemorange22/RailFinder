@@ -8,7 +8,7 @@ import sqlite3
 from journey_planner import JourneyPlanner
 import datetime
 import os
-import pytz  # Ajoute cette importation en haut du fichier
+import pytz 
 
 
 class RoutePlannerApp:
@@ -20,7 +20,6 @@ class RoutePlannerApp:
         #self.db.load_and_prepare_data()
         self.planner = JourneyPlanner(self.db)
         self.journey_geometry = []
-        print("Exemple de villes chargées :", self.liste_ville[:10])
         self.active_entry = None
         self.loading_label = ttk.Label(master, text="Chargement en cours...", font=("Arial", 14), foreground="blue")
         self.loading_label.place(relx=0.5, rely=0.5, anchor="center")
@@ -183,7 +182,7 @@ class RoutePlannerApp:
 
     def get_all_stop_names(self):
         """
-        Retourne la liste de tous les noms de stops présents dans la base de données.
+        Returns a sorted list of all unique stop names from the database.
         """
         conn = sqlite3.connect(self.db_path)
         cursor = conn.cursor()
@@ -193,6 +192,9 @@ class RoutePlannerApp:
         return sorted(set(stop.stop_name for stop in stops if stop.stop_name))
 
     def add_stop(self):
+        """ Adds a new intermediate stop to the list of stops.
+            If the number of intermediate stops is less than 5, adds a new input field.
+        """
         if len(self.intermediate_stops_entries) < 5:
             row_num = len(self.intermediate_stops_entries)
             stop_label = ttk.Label(self.stops_frame, text=f"Étape {row_num + 1}:")
@@ -208,6 +210,7 @@ class RoutePlannerApp:
             )
 
     def remove_stop(self):
+        """ Delete the last intermediate stop entry."""
         if self.intermediate_stops_entries:
             label, entry = self.intermediate_stops_entries.pop()
             label.destroy()
@@ -218,6 +221,9 @@ class RoutePlannerApp:
             )
 
     def calculate_route(self):
+        """ Calculates the route based on the data entered by the user.
+            Displays the route details and draws the route on the map.
+        """
         self.loading_frame.place(relx=0.5, rely=0.5, anchor="center")
         self.loading_bar.start(10)  # Démarrer la barre de chargement
         self.master.update_idletasks()
@@ -299,6 +305,9 @@ class RoutePlannerApp:
         
 
     def auto_completion_proposition(self, event):
+        """Displays auto-completion suggestions for the departure, arrival, and intermediate stop entry fields.
+           Method called every time a key is released in one of the entry fields.
+        """
         widget = event.widget
         self.active_entry = widget
         input_text = widget.get()
@@ -329,6 +338,9 @@ class RoutePlannerApp:
             self.suggestions_listbox.place_forget()
 
     def select_suggestion(self, event):
+        """ Selects a suggestion from the list and places it in the active entry field.
+            Method called when the user clicks on a suggestion, presses "Enter", or double-clicks a suggestion.
+        """
         selected_index = self.suggestions_listbox.curselection()
         if selected_index and self.active_entry:
             selected_city = self.suggestions_listbox.get(selected_index)
@@ -347,6 +359,8 @@ class RoutePlannerApp:
             self.suggestions_listbox.activate(0)
 
     def navigate_up(self, _=None):
+        """ Navigates up in the suggestions list.
+            Method called when the user presses the up arrow key."""
         cur = self.suggestions_listbox.curselection()
         if cur:
             idx = cur[0]
@@ -361,6 +375,8 @@ class RoutePlannerApp:
         self.suggestions_listbox.focus_set()
 
     def navigate_down(self, _=None):
+        """ Navigates down in the suggestions list.
+            Method called when the user presses the down arrow key."""
         cur = self.suggestions_listbox.curselection()
         size = self.suggestions_listbox.size()
         if cur:
@@ -376,10 +392,9 @@ class RoutePlannerApp:
         self.suggestions_listbox.focus_set()
     
     
-    # Function to get latitude and longitude by stop name
     def get_stop_lat_lon_by_name(self, stop_name):
         """
-        Retourne (lat, lon) pour un stop_name donné, ou None si non trouvé.
+        Returns (lat, lon) for a given stop_name, or None if not found.
         """
         conn = sqlite3.connect(self.db_path)
         cursor = conn.cursor()
@@ -397,7 +412,7 @@ class RoutePlannerApp:
         
 
     def tracage_map(self):
-        # Efface les anciens marqueurs
+        """Displays the route on the map and sets markers for the departure and arrival cities."""
         self.map_canvas.delete_all_marker()
         
         departure = self.departure_city_entry.get()
@@ -420,7 +435,7 @@ class RoutePlannerApp:
     
     def get_stop_id_by_name(self, stop_name):
         """
-        Retourne le stop_id pour un stop_name donné, ou None si non trouvé.
+        Returns the stop_id for a given stop_name, or None if not found.
         """
         conn = sqlite3.connect(self.db_path)
         cursor = conn.cursor()
