@@ -396,7 +396,8 @@ class RoutePlannerApp:
 
         if dep_coords:
             dep_lat, dep_lon = dep_coords
-            self.map_canvas.set_marker(dep_lat, dep_lon)
+            icon_path = tk.PhotoImage(file=os.path.join(os.path.dirname(__file__), "dep_icon.png"))
+            self.map_canvas.set_marker(dep_lat, dep_lon, icon=icon_path)
         if arr_coords:
             arr_lat, arr_lon = arr_coords
             icon_path = tk.PhotoImage(file=os.path.join(os.path.dirname(__file__), "icon_arrivee.png"))
