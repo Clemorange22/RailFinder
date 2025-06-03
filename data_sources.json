@@ -1,11 +1,8 @@
 {
-   "aura" : "https://mobi-iti-ara.okina.fr/static/mobiiti_technique/DAT_AURA_GTFS_ExportAOM.zip",
-    "flixbus":"https://gtfs.gis.flix.tech/gtfs_generic_eu.zip",
+   
     "intercites":"https://eu.ftp.opendatasoft.com/sncf/plandata/export-intercites-gtfs-last.zip",
     "ter":"https://eu.ftp.opendatasoft.com/sncf/plandata/export-ter-gtfs-last.zip",
-    "tgv":"https://eu.ftp.opendatasoft.com/sncf/plandata/export_gtfs_voyages.zip",
-    "paris":"https://eu.ftp.opendatasoft.com/stif/GTFS/IDFM-gtfs.zip",
-    "eurostar" : "https://gtfs.eurostar.com/assets/gtfs.zip"
+    "tgv":"https://eu.ftp.opendatasoft.com/sncf/plandata/export_gtfs_voyages.zip"    
 }
     
 
