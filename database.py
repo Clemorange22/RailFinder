@@ -424,3 +424,25 @@ class Database:
         row = cursor.fetchone()
         conn.close()
         return Trip(**dict(row)) if row else None
+
+    def get_stop_sequences(self, from_stop_id: str, to_stop_id: str, trip_id: str):
+        """
+        Get the stop sequences for the departure and arrival stops for a given trip.
+        """
+        conn, cursor = self.get_connection()
+        cursor.execute(
+            """
+            SELECT stop_sequence
+            FROM stop_times
+            WHERE trip_id = ? AND stop_id IN (?, ?)
+            ORDER BY stop_sequence
+            """,
+            (trip_id, from_stop_id, to_stop_id),
+        )
+        stop_sequences = cursor.fetchall()
+        conn.close()
+        if len(stop_sequences) != 2:
+            raise ValueError(
+                f"Expected exactly two stop sequences for trip {trip_id}, got {len(stop_sequences)}"
+            )
+        return stop_sequences[0][0], stop_sequences[1][0]

@@ -3,6 +3,7 @@ from calendar import c
 import datetime
 import sqlite3
 import time
+from tracemalloc import stop
 
 from database import Database
 from models import StopTime, Stop, Transfer, Trip, JourneyStep
@@ -403,9 +404,13 @@ class JourneyPlanner:
             route_id = None
             route_short_name = None
             route_long_name = None
+            from_stop_sequence = None
+            to_stop_sequence = None
             trip_headsign = None
             transfer = trip_id is None
             transfer_time = None
+            agency_id = None
+            agency_name = None
 
             if trip_id:
                 trip = db.get_trip_by_id(trip_id)
@@ -413,6 +418,13 @@ class JourneyPlanner:
                 route_short_name = trip.route_short_name if trip else None
                 route = db.get_route_by_id(route_id) if route_id else None
                 route_long_name = route.route_long_name if route else None
+                try:
+                    from_stop_sequence, to_stop_sequence = db.get_stop_sequences(
+                        from_stop_id, to_stop_id, trip_id
+                    )
+                except ValueError:
+                    from_stop_sequence = None
+                    to_stop_sequence = None
                 trip_headsign = trip.trip_headsign if trip else None
                 # Get departure time from the database (since path times are arrivals)
                 departure_time = self.get_next_departure(
@@ -420,6 +432,10 @@ class JourneyPlanner:
                 )
                 if departure_time is None:
                     departure_time = from_arrival_time.strftime("%H:%M:%S")
+
+                agency_id = route.agency_id if route else None
+                agency = db.get_agency_by_id(agency_id) if agency_id else None
+                agency_name = agency.agency_name if agency else None
             else:
                 # Transfer: compute transfer time if possible
                 transfer_time = int(
@@ -442,9 +458,13 @@ class JourneyPlanner:
                     route_id=route_id,
                     route_short_name=route_short_name,
                     route_long_name=route_long_name,
+                    from_stop_sequence=from_stop_sequence,
+                    to_stop_sequence=to_stop_sequence,
                     trip_headsign=trip_headsign,
                     transfer=transfer,
                     transfer_time=transfer_time,
+                    agency_id=agency_id,
+                    agency_name=agency_name,
                 )
             )
         # Remove the first step if its stop name is the same as the second step's stop name
@@ -478,12 +498,76 @@ class JourneyPlanner:
                         step.route_short_name or step.route_long_name or "Unknown Route"
                     )
                     summary.append(
-                        f"---------------------------------------------------------------------\n"
+                        f"-------------------------------------------------------------------------\n"
                         f"Ride on {route_name} ({step.route_id}) from {step.from_stop_name} ({step.from_stop_id}) to {step.to_stop_name} ({step.to_stop_id}).\n"
-                        f"Trip {step.trip_headsign}, departing at {step.departure_time} and arriving at {step.arrival_time}"
+                        f"Trip {step.trip_headsign} operated by {step.agency_name}, departing at {step.departure_time} and arriving at {step.arrival_time}\n"
+                        f"-------------------------------------------------------------------------"
                     )
             end_step = journey_steps[-1]
             summary.append(
                 f"End at {end_step.to_stop_name} ({end_step.to_stop_id}) at {end_step.arrival_time}"
             )
         return "\n".join(summary) if summary else "No journey steps available."
+
+    def get_journey_step_geometry(
+        self,
+        step: JourneyStep,
+        conn: sqlite3.Connection | None = None,
+        cursor: sqlite3.Cursor | None = None,
+    ) -> list[tuple[float, float]]:
+        """
+        Get the geographical coordinates for a single journey step.
+        Returns a list of tuples (latitude, longitude).
+        """
+        if conn is None or cursor is None:
+            conn, cursor = self.db.get_connection()
+            close_conn = True
+        else:
+            close_conn = False
+        geometry = [(step.from_stop_lat, step.from_stop_lon)]
+        if (
+            step.trip_id
+            and step.from_stop_sequence is not None
+            and step.to_stop_sequence is not None
+        ):
+            sql = """
+            SELECT stop_lat, stop_lon
+            FROM stop_times
+            JOIN stops ON stop_times.stop_id = stops.stop_id
+            WHERE trip_id = ? AND stop_sequence > ? AND stop_sequence < ?
+            ORDER BY stop_sequence
+            """
+            cursor.execute(
+                sql,
+                (
+                    step.trip_id,
+                    step.from_stop_sequence,
+                    step.to_stop_sequence,
+                ),
+            )
+            intermediate_stops = cursor.fetchall()
+            for lat, lon in intermediate_stops:
+                geometry.append((lat, lon))
+        geometry.append((step.to_stop_lat, step.to_stop_lon))
+        if close_conn:
+            conn.close()
+        return geometry
+
+    def get_journey_geometry(
+        self, journey_steps: list[JourneyStep]
+    ) -> list[tuple[float, float]]:
+        """
+        Get the geographical coordinates of the journey steps.
+        Returns a list of tuples (latitude, longitude).
+        """
+        geometry = []
+        conn, cursor = self.db.get_connection()
+        for step in journey_steps:
+            step_geometry = self.get_journey_step_geometry(step, conn, cursor)
+            if geometry and step_geometry:
+                # Avoid duplicate points between steps
+                geometry.extend(step_geometry[1:])
+            else:
+                geometry.extend(step_geometry)
+        conn.close()
+        return geometry
