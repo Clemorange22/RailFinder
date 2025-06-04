@@ -225,8 +225,9 @@ class JourneyPlanner:
         return cursor.fetchone()
 
     def heuristic(self, lat1, lon1, lat2, lon2, ride_number: int) -> float:
-        ASSUMED_SPEED_KMH = 150  # Assumed speed in km/h for the heuristic
-        TRANSFER_PENALTY_MINUTES = 5  # Transfer penalty in minutes
+        ASSUMED_SPEED_KMH = 60  # Assumed speed in km/h for the heuristic
+        TRANSFER_PENALTY_MINUTES = 3  # Transfer penalty in minutes
+        # TODO: Add another penalty for the transfer
         return (
             geodistance(lat1, lon1, lat2, lon2) / ASSUMED_SPEED_KMH * 3600
             + ride_number * 60 * TRANSFER_PENALTY_MINUTES

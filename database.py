@@ -1,3 +1,4 @@
+import datetime
 import io
 import sqlite3
 import requests
@@ -6,8 +7,8 @@ import csv
 import os
 from models import Agency, Route, Shape, StopTime, Stop, Transfer, Trip
 from typing import Optional
-from utils import geodistance_meters
 import json
+from transfer_generator import TransferGenerator
 
 
 class Database:
@@ -17,6 +18,45 @@ class Database:
     def reset_database(self):
         if os.path.exists(self.db_name):
             os.remove(self.db_name)
+
+    def create_metadata_table(self):
+        conn = sqlite3.connect(self.db_name)
+        cursor = conn.cursor()
+        cursor.execute(
+            """
+            CREATE TABLE IF NOT EXISTS metadata (
+                key TEXT PRIMARY KEY,
+                value TEXT
+            )
+            """
+        )
+        conn.commit()
+        conn.close()
+
+    def set_metadata(self, key: str, value: str):
+        conn = sqlite3.connect(self.db_name)
+        cursor = conn.cursor()
+        cursor.execute(
+            "INSERT OR REPLACE INTO metadata (key, value) VALUES (?, ?)", (key, value)
+        )
+        conn.commit()
+        conn.close()
+
+    def get_metadata(self, key: str) -> Optional[str]:
+        conn = sqlite3.connect(self.db_name)
+        cursor = conn.cursor()
+        # has the metadata table been created?
+        cursor.execute(
+            "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='metadata'"
+        )
+        row = cursor.fetchone()
+        if row[0] == 0:
+            conn.close()
+            return None
+        cursor.execute("SELECT value FROM metadata WHERE key = ?", (key,))
+        row = cursor.fetchone()
+        conn.close()
+        return row[0] if row else None
 
     def create_gtfs_tables(self):
         conn = sqlite3.connect(self.db_name)
@@ -51,7 +91,25 @@ class Database:
                     stop_timezone TEXT,
                     wheelchair_boarding INTEGER,
                     platform_code TEXT,
-                    level_id TEXT
+                    level_id TEXT,
+                    alias TEXT,
+                    stop_area TEXT,
+                    lest_x REAL,
+                    lest_y REAL,
+                    zone_name TEXT,
+                    authority TEXT,
+                    stop_direction TEXT,
+                    vehicle_type TEXT,
+                    mta_stop_id TEXT,
+                    regional_fare_card TEXT,
+                    tts_stop_name TEXT,
+                    stop_elevation REAL,
+                    ch_station_long_name TEXT,
+                    ch_station_synonym1 TEXT,
+                    ch_station_synonym2 TEXT,
+                    ch_station_synonym3 TEXT,
+                    ch_station_synonym4 TEXT,
+                    stop_idx INTEGER
                 )
             """,
             "routes": """
@@ -66,7 +124,11 @@ class Database:
                     route_color TEXT,
                     route_text_color TEXT,
                     route_sort_order INTEGER,
-                    bikes_allowed INTEGER
+                    bikes_allowed INTEGER,
+                    competent_authority TEXT,
+                    network_id TEXT,
+                    eligibility_restricted INTEGER,
+                    regional_fare_card TEXT
                 )
             """,
             "trips": """
@@ -76,6 +138,7 @@ class Database:
                     service_id TEXT NOT NULL,
                     trip_headsign TEXT,
                     trip_short_name TEXT,
+                    trip_long_name TEXT,
                     direction_id INTEGER,
                     block_id TEXT,
                     shape_id TEXT,
@@ -85,7 +148,18 @@ class Database:
                     route_short_name TEXT,
                     trip_bikes_allowed INTEGER,
                     ticketing_trip_id TEXT,
-                    ticketing_type TEXT
+                    ticketing_type TEXT,
+                    direction_code TEXT,
+                    note_id TEXT,
+                    mean_duration_factor REAL,
+                    mean_duration_offset REAL,
+                    safe_duration_factor REAL,
+                    safe_duration_offset REAL,
+                    cars_allowed INTEGER,
+                    mta_trip_id TEXT,
+                    boarding_type INTEGER,
+                    attributes_ch TEXT,
+                    realtime_trip_id TEXT
                 )
             """,
             "stop_times": """
@@ -107,6 +181,13 @@ class Database:
                     local_zone_id TEXT,
                     pickup_booking_rule_id TEXT,
                     drop_off_booking_rule_id TEXT,
+                    note_id TEXT,
+                    location_id TEXT,
+                    location_group_id TEXT,
+                    continuous_pickup INTEGER,
+                    continuous_drop_off INTEGER,
+                    attributes_ch TEXT,
+                    fare_units_traveled INTEGER,
                     PRIMARY KEY (trip_id, stop_id, stop_sequence)
                 )
             """,
@@ -165,7 +246,10 @@ class Database:
                     feed_end_date TEXT,
                     feed_version TEXT,
                     conv_rev TEXT,
-                    plan_rev TEXT
+                    plan_rev TEXT,
+                    default_lang TEXT,
+                    feed_contact_mail TEXT,
+                    feed_contact_url TEXT
                 )
             """,
         }
@@ -289,51 +373,22 @@ class Database:
     def add_nearby_transfers(self, max_distance_m=100, transfer_time_sec=120):
         """
         Add transfers between all stops within max_distance_m meters of each other,
-        except if a transfer already exists between the stops or if both stop_id starts with 'IDFM'.
+        except if a transfer already exists between the stops or if both stop_id starts with excluded prefixes.
+        Uses multiprocessing and a spatial index for efficiency.
         """
-
-        conn, cursor = self.get_connection()
-        cursor.execute("SELECT stop_id, stop_lat, stop_lon FROM stops")
-        stops = cursor.fetchall()
-        # Build a set of all existing transfer pairs
-        cursor.execute("SELECT from_stop_id, to_stop_id FROM transfers")
-        existing_transfers = set((row[0], row[1]) for row in cursor.fetchall())
-
-        for i, (stop_id1, lat1, lon1) in enumerate(stops):
-            for stop_id2, lat2, lon2 in stops[i + 1 :]:
-                if stop_id1 == stop_id2:
-                    continue
-                # Skip if both stop IDs start with 'IDFM'
-                if stop_id1.startswith("IDFM") and stop_id2.startswith("IDFM"):
-                    continue
-                # Skip if transfer already exists in either direction
-                if (stop_id1, stop_id2) in existing_transfers or (
-                    stop_id2,
-                    stop_id1,
-                ) in existing_transfers:
-                    continue
-                dist = geodistance_meters(lat1, lon1, lat2, lon2)
-                if dist <= max_distance_m:
-                    # Insert transfer in both directions
-                    cursor.execute(
-                        "INSERT OR IGNORE INTO transfers (from_stop_id, to_stop_id, transfer_type, min_transfer_time) VALUES (?, ?, ?, ?)",
-                        (stop_id1, stop_id2, 2, transfer_time_sec),
-                    )
-                    cursor.execute(
-                        "INSERT OR IGNORE INTO transfers (from_stop_id, to_stop_id, transfer_type, min_transfer_time) VALUES (?, ?, ?, ?)",
-                        (stop_id2, stop_id1, 2, transfer_time_sec),
-                    )
-        conn.commit()
-        conn.close()
-        print(
-            f"Nearby transfers (<= {max_distance_m}m) added, excluding IDFM stops and existing transfers."
+        tg = TransferGenerator(
+            self,
+            max_distance_m=max_distance_m,
+            transfer_time_sec=transfer_time_sec,
         )
+        tg.generate_transfers()
 
     def load_and_prepare_data(self, data_path: str):
         """
         Load GTFS data from sources in data_path, create tables, indexes, and generate nearby transfers.
         """
         self.reset_database()
+        self.create_metadata_table()
         self.create_gtfs_tables()
 
         with open(data_path, "r") as file:
@@ -351,6 +406,33 @@ class Database:
         print("Generating nearby transfers...")
         self.add_nearby_transfers(max_distance_m=100, transfer_time_sec=120)
         print("GTFS data loaded and transfers generated successfully.")
+        self.set_metadata("updated_at", datetime.datetime.now().isoformat())
+
+    def update_database(self, data_path: str, force_update: bool = False):
+        """
+        Reload GTFS data from sources if the database is empty or if the last update was more than 24 hours ago.
+        """
+        last_update = self.get_metadata("updated_at")
+
+        if (
+            not last_update
+            or (
+                datetime.datetime.now() - datetime.datetime.fromisoformat(last_update)
+            ).total_seconds()
+            > 24 * 3600
+            or force_update
+        ):
+            if not last_update:
+                print("Database is empty, loading GTFS data for the first time.")
+            elif force_update:
+                print("Forcing reload of GTFS data.")
+            else:
+                print(
+                    "Database is outdated, reloading GTFS data as last update was more than 24 hours ago."
+                )
+            self.load_and_prepare_data(data_path)
+        else:
+            print("Database is up-to-date, no need to reload GTFS data.")
 
     def get_agency_by_id(self, agency_id: str) -> Optional[Agency]:
         conn = sqlite3.connect(self.db_name)
