@@ -528,3 +528,5 @@ class Database:
                 f"Expected exactly two stop sequences for trip {trip_id}, got {len(stop_sequences)}"
             )
         return stop_sequences[0][0], stop_sequences[1][0]
+    
+    

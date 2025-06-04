@@ -1,13 +1,14 @@
 import tkinter as tk
 from tkinter import ttk, messagebox
 from tkintermapview import TkinterMapView
-import database
-import journey_planner
+from database import Database
+
 from models import StopTime, Stop, Transfer, Trip, JourneyStep
 import sqlite3
 from journey_planner import JourneyPlanner
 import datetime
-import pytz  # Ajoute cette importation en haut du fichier
+import os
+import pytz 
 
 
 class RoutePlannerApp:
@@ -15,8 +16,10 @@ class RoutePlannerApp:
         self.master = master
         self.db_path = db_path
         self.liste_ville = self.get_all_stop_names()
-        self.planner = JourneyPlanner(self.db_path)
-        print("Exemple de villes chargées :", self.liste_ville[:10])
+        self.db = Database(self.db_path)
+        #self.db.load_and_prepare_data()
+        self.planner = JourneyPlanner(self.db)
+        self.journey_geometry = []
         self.active_entry = None
         self.loading_label = ttk.Label(master, text="Chargement en cours...", font=("Arial", 14), foreground="blue")
         self.loading_label.place(relx=0.5, rely=0.5, anchor="center")
@@ -168,10 +171,18 @@ class RoutePlannerApp:
         )
         self.route_details_text.config(state=tk.DISABLED)
         self.loading_label.destroy()
+        # Chargement label + progressbar
+        self.loading_frame = ttk.Frame(master, relief="raised", padding=15)
+        self.loading_label = ttk.Label(self.loading_frame, text="🔄 Calcul de l'itinéraire...", font=("Arial", 14, "bold"))
+        self.loading_bar = ttk.Progressbar(self.loading_frame, mode="indeterminate", length=200)
+
+        self.loading_label.pack(pady=(0, 10))
+        self.loading_bar.pack()
+
 
     def get_all_stop_names(self):
         """
-        Retourne la liste de tous les noms de stops présents dans la base de données.
+        Returns a sorted list of all unique stop names from the database.
         """
         conn = sqlite3.connect(self.db_path)
         cursor = conn.cursor()
@@ -181,6 +192,9 @@ class RoutePlannerApp:
         return sorted(set(stop.stop_name for stop in stops if stop.stop_name))
 
     def add_stop(self):
+        """ Adds a new intermediate stop to the list of stops.
+            If the number of intermediate stops is less than 5, adds a new input field.
+        """
         if len(self.intermediate_stops_entries) < 5:
             row_num = len(self.intermediate_stops_entries)
             stop_label = ttk.Label(self.stops_frame, text=f"Étape {row_num + 1}:")
@@ -196,6 +210,7 @@ class RoutePlannerApp:
             )
 
     def remove_stop(self):
+        """ Delete the last intermediate stop entry."""
         if self.intermediate_stops_entries:
             label, entry = self.intermediate_stops_entries.pop()
             label.destroy()
@@ -206,6 +221,15 @@ class RoutePlannerApp:
             )
 
     def calculate_route(self):
+        """ Calculates the route based on the data entered by the user.
+            Displays the route details and draws the route on the map.
+        """
+        self.loading_frame.place(relx=0.5, rely=0.5, anchor="center")
+        self.loading_bar.start(10)  # Démarrer la barre de chargement
+        self.master.update_idletasks()
+        self.departure_city_entry.config(state="disabled")
+        self.arrival_city_entry.config(state="disabled")
+
         departure = self.departure_city_entry.get()
         arrival = self.arrival_city_entry.get()
         stops = [
@@ -218,13 +242,16 @@ class RoutePlannerApp:
         date_str = self.departure_date_entry.get()
         time_str = self.departure_time_entry.get()
         try:
-            departure_datetime = datetime.datetime.strptime(
+            # On suppose que l'utilisateur saisit la date/heure en heure locale France
+            departure_datetime_local = datetime.datetime.strptime(
                 f"{date_str} {time_str}", "%d/%m/%Y %H:%M"
             )
-            # Conversion en UTC (en supposant que l'entrée est en heure locale France)
+            # Ajout : conversion naïve locale -> UTC naïf
             local_tz = pytz.timezone("Europe/Paris")
-            departure_datetime = local_tz.localize(departure_datetime)
-            departure_datetime_utc = departure_datetime.astimezone(pytz.utc)
+            aware_local = local_tz.localize(departure_datetime_local)
+            aware_utc = aware_local.astimezone(pytz.utc)
+            # On retire le tzinfo pour obtenir un datetime naïf en UTC
+            departure_datetime_utc = aware_utc.replace(tzinfo=None)
         except ValueError:
             messagebox.showerror(
                 "Erreur", "Veuillez entrer une date et une heure de départ valides (JJ/MM/AAAA HH:MM)."
@@ -245,22 +272,42 @@ class RoutePlannerApp:
         details = f"Calcul de l'itinéraire:\n"
         details += f"Départ: {departure}:{from_stop_id}\n"
         details += f"Arrivée: {arrival}:{to_stop_id}\n"
-        details += f"Date et heure de départ (locale): {departure_datetime}\n"
+        details += f"Date et heure de départ (locale): {aware_local}\n"
         details += f"Date et heure de départ (UTC): {departure_datetime_utc}\n"
         if stops:
             details += f"Étapes: {', '.join(stops)}\n"
         details += f"Type de trains: {train_type}\n"
         details += f"Préférence: {preference}\n\n"
-        details += "--- (Logique de calcul et résultats réels à implémenter) ---"
-        details+= self.planner.journey_search(from_stop_id,to_stop_id,departure_datetime_utc,datetime.timedelta(1))
+        if from_stop_id and to_stop_id:
+            p = self.planner.journey_search(from_stop_id,to_stop_id,departure_datetime_utc)
+            if p is not None:
+                journey_steps = self.planner.get_journey_details(p)
+                summary = self.planner.get_journey_summary(journey_steps)
+                details += summary
+                line = self.planner.get_journey_geometry(journey_steps)
+                if line:
+                    details += "\n\nTracé du trajet:\n"
+                    details += str(line)
+                self.journey_geometry = self.planner.get_journey_geometry(journey_steps)
         self.route_details_text.insert(tk.END, details)
         self.route_details_text.config(state=tk.DISABLED)
 
         self.map_canvas.delete("all")
         self.tracage_map()
+        # Simuler le calcul de l'itinéraire
+        self.loading_bar.stop()
+        self.loading_frame.place_forget()
+
+        # Réactiver les champs de saisie
+        self.departure_city_entry.config(state="normal")
+        self.arrival_city_entry.config(state="normal")
+
         
 
     def auto_completion_proposition(self, event):
+        """Displays auto-completion suggestions for the departure, arrival, and intermediate stop entry fields.
+           Method called every time a key is released in one of the entry fields.
+        """
         widget = event.widget
         self.active_entry = widget
         input_text = widget.get()
@@ -291,6 +338,9 @@ class RoutePlannerApp:
             self.suggestions_listbox.place_forget()
 
     def select_suggestion(self, event):
+        """ Selects a suggestion from the list and places it in the active entry field.
+            Method called when the user clicks on a suggestion, presses "Enter", or double-clicks a suggestion.
+        """
         selected_index = self.suggestions_listbox.curselection()
         if selected_index and self.active_entry:
             selected_city = self.suggestions_listbox.get(selected_index)
@@ -308,16 +358,25 @@ class RoutePlannerApp:
             self.suggestions_listbox.selection_set(0)
             self.suggestions_listbox.activate(0)
 
-    def navigate_up(self, event):
+    def navigate_up(self, _=None):
+        """ Navigates up in the suggestions list.
+            Method called when the user presses the up arrow key."""
         cur = self.suggestions_listbox.curselection()
         if cur:
             idx = cur[0]
             if idx > 0:
                 self.suggestions_listbox.selection_clear(0, tk.END)
                 self.suggestions_listbox.selection_set(idx - 1)
-                self.suggestions_listbox.activate(idx - 1)
+                self.suggestions_listbox.see(idx - 1)
+        else:
+            if self.suggestions_listbox.size() > 0:
+                self.suggestions_listbox.selection_set(0)
+                self.suggestions_listbox.see(0)
+        self.suggestions_listbox.focus_set()
 
-    def navigate_down(self, event):
+    def navigate_down(self, _=None):
+        """ Navigates down in the suggestions list.
+            Method called when the user presses the down arrow key."""
         cur = self.suggestions_listbox.curselection()
         size = self.suggestions_listbox.size()
         if cur:
@@ -325,12 +384,17 @@ class RoutePlannerApp:
             if idx < size - 1:
                 self.suggestions_listbox.selection_clear(0, tk.END)
                 self.suggestions_listbox.selection_set(idx + 1)
-                self.suggestions_listbox.activate(idx + 1)
+                self.suggestions_listbox.see(idx + 1)
+        else:
+            if size > 0:
+                self.suggestions_listbox.selection_set(0)
+                self.suggestions_listbox.see(0)
+        self.suggestions_listbox.focus_set()
     
-    # Function to get latitude and longitude by stop name
+    
     def get_stop_lat_lon_by_name(self, stop_name):
         """
-        Retourne (lat, lon) pour un stop_name donné, ou None si non trouvé.
+        Returns (lat, lon) for a given stop_name, or None if not found.
         """
         conn = sqlite3.connect(self.db_path)
         cursor = conn.cursor()
@@ -348,20 +412,30 @@ class RoutePlannerApp:
         
 
     def tracage_map(self):
-        self.departure = self.departure_city_entry.get()
-        self.arrival = self.arrival_city_entry.get()
-        self.dep_lat, self.dep_lon = self.get_stop_lat_lon_by_name(self.departure)
-        self.dep_marker = self.map_canvas.set_marker(self.dep_lat, self.dep_lon)
-        self.arr_lat, self.arr_lon = self.get_stop_lat_lon_by_name(self.arrival)
-        #self.arrival_icon = tk.PhotoImage(file=r"C:\Users\nbaur\Documents\Travail Noelie\INSA\FIMI 2A\ISN\RailFinder\icon_arrivee.png")
-        self.arr_marker = self.map_canvas.set_marker(self.arr_lat, self.arr_lon, icon=self.arrival_icon)
+        """Displays the route on the map and sets markers for the departure and arrival cities."""
+        self.map_canvas.delete_all_marker()
         
+        departure = self.departure_city_entry.get()
+        arrival = self.arrival_city_entry.get()
+        dep_coords = self.get_stop_lat_lon_by_name(departure)
+        arr_coords = self.get_stop_lat_lon_by_name(arrival)
+
+        if dep_coords:
+            dep_lat, dep_lon = dep_coords
+            icon_path = tk.PhotoImage(file=os.path.join(os.path.dirname(__file__), "dep_icon.png"))
+            self.map_canvas.set_marker(dep_lat, dep_lon, icon=icon_path)
+        if arr_coords:
+            arr_lat, arr_lon = arr_coords
+            icon_path = tk.PhotoImage(file=os.path.join(os.path.dirname(__file__), "icon_arrivee.png"))
+            self.map_canvas.set_marker(arr_lat, arr_lon, icon=icon_path)
         
+        if len(self.journey_geometry) > 0:
+            path_1 = self.map_canvas.set_path(self.journey_geometry)
         
-    # Ajoute cette méthode dans ta classe RoutePlannerApp
+    
     def get_stop_id_by_name(self, stop_name):
         """
-        Retourne le stop_id pour un stop_name donné, ou None si non trouvé.
+        Returns the stop_id for a given stop_name, or None if not found.
         """
         conn = sqlite3.connect(self.db_path)
         cursor = conn.cursor()
@@ -373,10 +447,6 @@ class RoutePlannerApp:
         conn.close()
         return row[0] if row else None
 
-"""db = database.Database()
-
-planner = journey_planner.JourneyPlanner(db)  # Création de l'instance
-details = planner.get_journey_details(["Paris", "Lyon"])"""
 
 if __name__ == "__main__":
     root = tk.Tk()
