@@ -296,11 +296,13 @@ class RoutePlannerApp:
                 summary = self.planner.get_journey_summary(journey_steps)
                 details += f"Temps d'exécution de la recherche: {execution_time:.2f} secondes\n"
                 details += summary
+                self.journey_geometry = []
                 line = self.planner.get_journey_geometry(journey_steps)
                 if line:
                     details += "\n\nTracé du trajet:\n"
                     details += str(line)
-                self.journey_geometry = self.planner.get_journey_geometry(journey_steps)
+                    self.journey_geometry = line
+
         self.route_details_text.insert(tk.END, details)
         self.route_details_text.config(state=tk.DISABLED)
 
@@ -442,7 +444,10 @@ class RoutePlannerApp:
             self.map_canvas.set_marker(arr_lat, arr_lon, icon=icon_path)
 
         if len(self.journey_geometry) > 0:
-            path_1 = self.map_canvas.set_path(self.journey_geometry)
+            self.map_canvas.delete_all_path()
+            path_1 = self.map_canvas.set_path(
+                self.journey_geometry, color="blue", width=2
+            )
 
     def get_stop_id_by_name(self, stop_name):
         """
