@@ -8,7 +8,7 @@ import sqlite3
 from journey_planner import JourneyPlanner
 import datetime
 import os
-import pytz 
+import pytz
 
 
 class RoutePlannerApp:
@@ -17,11 +17,13 @@ class RoutePlannerApp:
         self.db_path = db_path
         self.liste_ville = self.get_all_stop_names()
         self.db = Database(self.db_path)
-        #self.db.load_and_prepare_data()
+        # self.db.load_and_prepare_data()
         self.planner = JourneyPlanner(self.db)
         self.journey_geometry = []
         self.active_entry = None
-        self.loading_label = ttk.Label(master, text="Chargement en cours...", font=("Arial", 14), foreground="blue")
+        self.loading_label = ttk.Label(
+            master, text="Chargement en cours...", font=("Arial", 14), foreground="blue"
+        )
         self.loading_label.place(relx=0.5, rely=0.5, anchor="center")
         self.master.update_idletasks()
         master.title("Rail Finder - Planificateur d'Itinéraires")
@@ -149,16 +151,17 @@ class RoutePlannerApp:
         calculate_button.grid(row=14, column=0, columnspan=2, padx=5, pady=20)
 
         # Display Frame Widgets
-        
-        #Display travel map
+
+        # Display travel map
         map_canvas_frame = ttk.LabelFrame(display_frame)
         map_canvas_frame.pack(pady=10, padx=10, fill="both", expand=True)
-        self.map_canvas = TkinterMapView(map_canvas_frame, width=400, height=260, corner_radius=0)
-        #definition of zoom scale and map position
+        self.map_canvas = TkinterMapView(
+            map_canvas_frame, width=400, height=260, corner_radius=0
+        )
+        # definition of zoom scale and map position
         self.map_canvas.set_position(46.7111, 1.7191)
         self.map_canvas.set_zoom(5)
         self.map_canvas.pack(fill="both", expand=True)
-        
 
         route_details_frame = ttk.LabelFrame(display_frame, text="Détails du trajet")
         route_details_frame.pack(pady=10, padx=10, fill="both", expand=True)
@@ -173,12 +176,17 @@ class RoutePlannerApp:
         self.loading_label.destroy()
         # Chargement label + progressbar
         self.loading_frame = ttk.Frame(master, relief="raised", padding=15)
-        self.loading_label = ttk.Label(self.loading_frame, text="🔄 Calcul de l'itinéraire...", font=("Arial", 14, "bold"))
-        self.loading_bar = ttk.Progressbar(self.loading_frame, mode="indeterminate", length=200)
+        self.loading_label = ttk.Label(
+            self.loading_frame,
+            text="🔄 Calcul de l'itinéraire...",
+            font=("Arial", 14, "bold"),
+        )
+        self.loading_bar = ttk.Progressbar(
+            self.loading_frame, mode="indeterminate", length=200
+        )
 
         self.loading_label.pack(pady=(0, 10))
         self.loading_bar.pack()
-
 
     def get_all_stop_names(self):
         """
@@ -192,8 +200,8 @@ class RoutePlannerApp:
         return sorted(set(stop.stop_name for stop in stops if stop.stop_name))
 
     def add_stop(self):
-        """ Adds a new intermediate stop to the list of stops.
-            If the number of intermediate stops is less than 5, adds a new input field.
+        """Adds a new intermediate stop to the list of stops.
+        If the number of intermediate stops is less than 5, adds a new input field.
         """
         if len(self.intermediate_stops_entries) < 5:
             row_num = len(self.intermediate_stops_entries)
@@ -210,7 +218,7 @@ class RoutePlannerApp:
             )
 
     def remove_stop(self):
-        """ Delete the last intermediate stop entry."""
+        """Delete the last intermediate stop entry."""
         if self.intermediate_stops_entries:
             label, entry = self.intermediate_stops_entries.pop()
             label.destroy()
@@ -221,8 +229,8 @@ class RoutePlannerApp:
             )
 
     def calculate_route(self):
-        """ Calculates the route based on the data entered by the user.
-            Displays the route details and draws the route on the map.
+        """Calculates the route based on the data entered by the user.
+        Displays the route details and draws the route on the map.
         """
         self.loading_frame.place(relx=0.5, rely=0.5, anchor="center")
         self.loading_bar.start(10)  # Démarrer la barre de chargement
@@ -254,7 +262,8 @@ class RoutePlannerApp:
             departure_datetime_utc = aware_utc.replace(tzinfo=None)
         except ValueError:
             messagebox.showerror(
-                "Erreur", "Veuillez entrer une date et une heure de départ valides (JJ/MM/AAAA HH:MM)."
+                "Erreur",
+                "Veuillez entrer une date et une heure de départ valides (JJ/MM/AAAA HH:MM).",
             )
             return
         # ----------------------------------------
@@ -279,10 +288,13 @@ class RoutePlannerApp:
         details += f"Type de trains: {train_type}\n"
         details += f"Préférence: {preference}\n\n"
         if from_stop_id and to_stop_id:
-            p = self.planner.journey_search(from_stop_id,to_stop_id,departure_datetime_utc)
+            p, execution_time = self.planner.journey_search(
+                from_stop_id, to_stop_id, departure_datetime_utc
+            )
             if p is not None:
                 journey_steps = self.planner.get_journey_details(p)
                 summary = self.planner.get_journey_summary(journey_steps)
+                details += f"Temps d'exécution de la recherche: {execution_time:.2f} secondes\n"
                 details += summary
                 line = self.planner.get_journey_geometry(journey_steps)
                 if line:
@@ -302,11 +314,9 @@ class RoutePlannerApp:
         self.departure_city_entry.config(state="normal")
         self.arrival_city_entry.config(state="normal")
 
-        
-
     def auto_completion_proposition(self, event):
         """Displays auto-completion suggestions for the departure, arrival, and intermediate stop entry fields.
-           Method called every time a key is released in one of the entry fields.
+        Method called every time a key is released in one of the entry fields.
         """
         widget = event.widget
         self.active_entry = widget
@@ -338,8 +348,8 @@ class RoutePlannerApp:
             self.suggestions_listbox.place_forget()
 
     def select_suggestion(self, event):
-        """ Selects a suggestion from the list and places it in the active entry field.
-            Method called when the user clicks on a suggestion, presses "Enter", or double-clicks a suggestion.
+        """Selects a suggestion from the list and places it in the active entry field.
+        Method called when the user clicks on a suggestion, presses "Enter", or double-clicks a suggestion.
         """
         selected_index = self.suggestions_listbox.curselection()
         if selected_index and self.active_entry:
@@ -359,8 +369,8 @@ class RoutePlannerApp:
             self.suggestions_listbox.activate(0)
 
     def navigate_up(self, _=None):
-        """ Navigates up in the suggestions list.
-            Method called when the user presses the up arrow key."""
+        """Navigates up in the suggestions list.
+        Method called when the user presses the up arrow key."""
         cur = self.suggestions_listbox.curselection()
         if cur:
             idx = cur[0]
@@ -375,8 +385,8 @@ class RoutePlannerApp:
         self.suggestions_listbox.focus_set()
 
     def navigate_down(self, _=None):
-        """ Navigates down in the suggestions list.
-            Method called when the user presses the down arrow key."""
+        """Navigates down in the suggestions list.
+        Method called when the user presses the down arrow key."""
         cur = self.suggestions_listbox.curselection()
         size = self.suggestions_listbox.size()
         if cur:
@@ -390,8 +400,7 @@ class RoutePlannerApp:
                 self.suggestions_listbox.selection_set(0)
                 self.suggestions_listbox.see(0)
         self.suggestions_listbox.focus_set()
-    
-    
+
     def get_stop_lat_lon_by_name(self, stop_name):
         """
         Returns (lat, lon) for a given stop_name, or None if not found.
@@ -400,7 +409,7 @@ class RoutePlannerApp:
         cursor = conn.cursor()
         cursor.execute(
             "SELECT stop_id, stop_name, stop_lat, stop_lon FROM stops WHERE stop_name = ? COLLATE NOCASE",
-            (stop_name,)
+            (stop_name,),
         )
         row = cursor.fetchone()
         conn.close()
@@ -409,12 +418,11 @@ class RoutePlannerApp:
             return stop.stop_lat, stop.stop_lon
         else:
             return None
-        
 
     def tracage_map(self):
         """Displays the route on the map and sets markers for the departure and arrival cities."""
         self.map_canvas.delete_all_marker()
-        
+
         departure = self.departure_city_entry.get()
         arrival = self.arrival_city_entry.get()
         dep_coords = self.get_stop_lat_lon_by_name(departure)
@@ -422,17 +430,20 @@ class RoutePlannerApp:
 
         if dep_coords:
             dep_lat, dep_lon = dep_coords
-            icon_path = tk.PhotoImage(file=os.path.join(os.path.dirname(__file__), "dep_icon.png"))
+            icon_path = tk.PhotoImage(
+                file=os.path.join(os.path.dirname(__file__), "dep_icon.png")
+            )
             self.map_canvas.set_marker(dep_lat, dep_lon, icon=icon_path)
         if arr_coords:
             arr_lat, arr_lon = arr_coords
-            icon_path = tk.PhotoImage(file=os.path.join(os.path.dirname(__file__), "icon_arrivee.png"))
+            icon_path = tk.PhotoImage(
+                file=os.path.join(os.path.dirname(__file__), "icon_arrivee.png")
+            )
             self.map_canvas.set_marker(arr_lat, arr_lon, icon=icon_path)
-        
+
         if len(self.journey_geometry) > 0:
             path_1 = self.map_canvas.set_path(self.journey_geometry)
-        
-    
+
     def get_stop_id_by_name(self, stop_name):
         """
         Returns the stop_id for a given stop_name, or None if not found.
@@ -440,8 +451,7 @@ class RoutePlannerApp:
         conn = sqlite3.connect(self.db_path)
         cursor = conn.cursor()
         cursor.execute(
-            "SELECT stop_id FROM stops WHERE stop_name = ? COLLATE NOCASE",
-            (stop_name,)
+            "SELECT stop_id FROM stops WHERE stop_name = ? COLLATE NOCASE", (stop_name,)
         )
         row = cursor.fetchone()
         conn.close()

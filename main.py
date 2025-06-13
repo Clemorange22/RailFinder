@@ -10,6 +10,7 @@ if __name__ == "__main__":
     db = Database()
     data_path = "data_sources.json"
     db.update_database(data_path, force_update=False)
+    db.create_gtfs_indexes()
 
     jp = JourneyPlanner(db)
 
@@ -55,7 +56,7 @@ if __name__ == "__main__":
     print(summary)
     print(geometry)"""
     print("Amsterdam to Rennes journey search")
-    p = jp.journey_search(
+    p, execution_time = jp.journey_search(
         "8400058",
         "StopPoint:OCETGV INOUI-87471003",
         datetime.datetime.now() + datetime.timedelta(hours=10),
@@ -69,4 +70,4 @@ if __name__ == "__main__":
     print(summary)
     print(geometry)
 
-print("placeholder line for stopping the debugger")
+print(f"Execution time: {execution_time} seconds")
