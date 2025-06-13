@@ -1,14 +1,9 @@
-from ast import parse
-from calendar import c
 import datetime
 import sqlite3
-import time
-from tracemalloc import stop
 
 from database import Database
-from models import StopTime, Stop, Transfer, Trip, JourneyStep
+from models import JourneyStep
 import heapq
-from math import radians, sin, cos, sqrt, atan2
 from utils import geodistance
 
 
