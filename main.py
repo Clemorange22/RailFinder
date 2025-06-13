@@ -57,17 +57,18 @@ if __name__ == "__main__":
     print(geometry)"""
     print("Amsterdam to Rennes journey search")
     p, execution_time = jp.journey_search(
-        "8400058",
+        "2992194",
         "StopPoint:OCETGV INOUI-87471003",
         datetime.datetime.now() + datetime.timedelta(hours=10),
     )
     if not p:
         print("No journey found")
-        exit(1)
-    details = jp.get_journey_details(p)
-    summary = jp.get_journey_summary(details)
-    geometry = jp.get_journey_geometry(details)
-    print(summary)
-    print(geometry)
+    else:
+        print(f"Journey found in {execution_time:.2f} seconds")
+        details = jp.get_journey_details(p)
+        summary = jp.get_journey_summary(details)
+        geometry = jp.get_journey_geometry(details)
+        print(summary)
+        print(geometry)
 
-print(f"Execution time: {execution_time} seconds")
+    print("placeholder for stopping the debugger")
