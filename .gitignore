@@ -1,5 +1,6 @@
 gtfs.db
 gtfs.db-journal
+profile_results.prof
 
 env/
 .vscode/
