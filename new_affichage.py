@@ -1,8 +1,7 @@
 import tkinter as tk
 from tkinter import ttk, messagebox
 from tkintermapview import TkinterMapView
-import database
-import journey_planner
+from database import Database
 from models import StopTime, Stop, Transfer, Trip, JourneyStep
 import sqlite3
 from journey_planner import JourneyPlanner
@@ -10,12 +9,13 @@ import datetime
 import customtkinter as ctk
 import pytz
 
+
 class RoutePlannerApp:
     def __init__(self, master, db_path="gtfs.db"):
         self.master = master
         self.db_path = db_path
-        self.planner = JourneyPlanner(self.db_path)
-        self.liste_ville = [] # Initialisé vide, sera rempli au démarrage de l'UI
+        self.planner = JourneyPlanner(Database(db_path))
+        self.liste_ville = []  # Initialisé vide, sera rempli au démarrage de l'UI
         self.active_entry = None
 
         master.title("Rail Finder - Planificateur d'Itinéraires")
@@ -32,46 +32,67 @@ class RoutePlannerApp:
         self.liste_ville = self.get_all_stop_names()
         print("Exemple de villes chargées :", self.liste_ville[:10])
 
-
         # --- Construction directe de l'interface utilisateur principale ---
         self._build_main_ui()
 
         # Le cadre de chargement pour le calcul d'itinéraire est initialisé ici, mais caché
-        self.loading_frame = ctk.CTkFrame(self.master, corner_radius=10, fg_color=("gray85", "gray15")) # A slightly different color for prominence
-        self.loading_label = ctk.CTkLabel(self.loading_frame, text="🔄 Calcul de l'itinéraire...", font=("Arial", 16, "bold"))
-        self.loading_bar = ctk.CTkProgressBar(self.loading_frame, mode="indeterminate", width=200)
+        self.loading_frame = ctk.CTkFrame(
+            self.master, corner_radius=10, fg_color=("gray85", "gray15")
+        )  # A slightly different color for prominence
+        self.loading_label = ctk.CTkLabel(
+            self.loading_frame,
+            text="🔄 Calcul de l'itinéraire...",
+            font=("Arial", 16, "bold"),
+        )
+        self.loading_bar = ctk.CTkProgressBar(
+            self.loading_frame, mode="indeterminate", width=200
+        )
 
         self.loading_label.pack(pady=(0, 10))
         self.loading_bar.pack()
-        self.loading_frame.place_forget() # Cache-le initialement
-
+        self.loading_frame.place_forget()  # Cache-le initialement
 
     def _build_main_ui(self):
         """Construit et affiche l'interface utilisateur principale de l'application."""
         # --- Main Frames (using CTkFrame) ---
         # 1. Create and pack the main frames first, dividing the master window
         # Control Frame (left half)
-        self.control_frame = ctk.CTkFrame(self.master, corner_radius=0, fg_color="transparent", border_width=0)
+        self.control_frame = ctk.CTkFrame(
+            self.master, corner_radius=0, fg_color="transparent", border_width=0
+        )
         self.control_frame.pack(side=tk.LEFT, fill=tk.Y, expand=False, padx=0, pady=0)
 
         # Display Frame (right half)
-        self.display_frame = ctk.CTkFrame(self.master, corner_radius=0, fg_color="transparent", border_width=0)
-        self.display_frame.pack(side=tk.RIGHT, fill=tk.BOTH, expand=True, padx=0, pady=0)
+        self.display_frame = ctk.CTkFrame(
+            self.master, corner_radius=0, fg_color="transparent", border_width=0
+        )
+        self.display_frame.pack(
+            side=tk.RIGHT, fill=tk.BOTH, expand=True, padx=0, pady=0
+        )
 
         # 2. Now, pack the titles *inside* their respective frames.
         # Control Frame Title (inside control_frame)
-        control_frame_title = ctk.CTkLabel(self.control_frame, text="Définir l'itinéraire", font=("Arial", 16, "bold"), fg_color="transparent")
-        control_frame_title.pack(side=tk.TOP, anchor="n", padx=10, pady=(10,0))
+        control_frame_title = ctk.CTkLabel(
+            self.control_frame,
+            text="Définir l'itinéraire",
+            font=("Arial", 16, "bold"),
+            fg_color="transparent",
+        )
+        control_frame_title.pack(side=tk.TOP, anchor="n", padx=10, pady=(10, 0))
 
         # Nested frame for control widgets to better manage padding within the main control_frame
         # This frame will now be packed *below* the title within control_frame.
         self.control_widgets_frame = ctk.CTkFrame(self.control_frame, corner_radius=10)
         self.control_widgets_frame.pack(fill="both", expand=True, padx=10, pady=10)
 
-
         # Display Frame Title (inside display_frame)
-        display_frame_title = ctk.CTkLabel(self.display_frame, text="Informations de l'itinéraire", font=("Arial", 16, "bold"), fg_color="transparent")
-        display_frame_title.pack(side=tk.TOP, anchor="n", padx=10, pady=(10,0))
+        display_frame_title = ctk.CTkLabel(
+            self.display_frame,
+            text="Informations de l'itinéraire",
+            font=("Arial", 16, "bold"),
+            fg_color="transparent",
+        )
+        display_frame_title.pack(side=tk.TOP, anchor="n", padx=10, pady=(10, 0))
 
         # --- Rest of your widgets follow, packed into control_widgets_frame or display_frame directly ---
 
@@ -87,12 +108,15 @@ class RoutePlannerApp:
         self.departure_city_entry.bind("<Down>", self.focus_suggestions_listbox)
 
         # Suggestions Listbox (Parent is master, not control_widgets_frame)
-        self.suggestions_listbox = tk.Listbox(self.master, width=25, height=5,
-                                             relief="flat",
-                                             highlightthickness=0,
-                                             bd=1,
-                                             font=('Arial',18)
-                                            )
+        self.suggestions_listbox = tk.Listbox(
+            self.master,
+            width=25,
+            height=5,
+            relief="flat",
+            highlightthickness=0,
+            bd=1,
+            font=("Arial", 18),
+        )
         self.suggestions_listbox.bind("<ButtonRelease-1>", self.select_suggestion)
         self.suggestions_listbox.bind("<Return>", self.select_suggestion)
         self.suggestions_listbox.bind("<Double-Button-1>", self.select_suggestion)
@@ -102,9 +126,8 @@ class RoutePlannerApp:
             bg=self.get_ctk_color("CTkFrame"),
             fg=self.get_ctk_color("text"),
             selectbackground=self.get_ctk_color("selection_color"),
-            selectforeground=self.get_ctk_color("text")
+            selectforeground=self.get_ctk_color("text"),
         )
-
 
         # Arrival City
         ctk.CTkLabel(self.control_widgets_frame, text="Ville d'arrivée :").grid(
@@ -116,9 +139,9 @@ class RoutePlannerApp:
         self.arrival_city_entry.bind("<Down>", self.focus_suggestions_listbox)
 
         # Date & Time of Departure
-        ctk.CTkLabel(self.control_widgets_frame, text="Date de départ (JJ/MM/AAAA) :").grid(
-            row=2, column=0, padx=5, pady=5, sticky="w"
-        )
+        ctk.CTkLabel(
+            self.control_widgets_frame, text="Date de départ (JJ/MM/AAAA) :"
+        ).grid(row=2, column=0, padx=5, pady=5, sticky="w")
         self.departure_date_entry = ctk.CTkEntry(self.control_widgets_frame, width=120)
         self.departure_date_entry.grid(row=2, column=1, padx=5, pady=5, sticky="w")
         self.departure_date_entry.insert(0, datetime.date.today().strftime("%d/%m/%Y"))
@@ -134,7 +157,9 @@ class RoutePlannerApp:
         ctk.CTkLabel(self.control_widgets_frame, text="Étapes :").grid(
             row=4, column=0, columnspan=2, padx=5, pady=5, sticky="w"
         )
-        self.stops_frame = ctk.CTkFrame(self.control_widgets_frame, fg_color="transparent")
+        self.stops_frame = ctk.CTkFrame(
+            self.control_widgets_frame, fg_color="transparent"
+        )
         self.stops_frame.grid(
             row=5, column=0, columnspan=2, padx=5, pady=5, sticky="ew"
         )
@@ -147,7 +172,9 @@ class RoutePlannerApp:
         self.add_stop_button.grid(row=6, column=0, padx=5, pady=5, sticky="w")
 
         self.remove_stop_button = ctk.CTkButton(
-            self.control_widgets_frame, text="Supprimer la dernière étape", command=self.remove_stop
+            self.control_widgets_frame,
+            text="Supprimer la dernière étape",
+            command=self.remove_stop,
         )
         self.remove_stop_button.grid(row=6, column=1, padx=5, pady=5, sticky="e")
 
@@ -191,20 +218,24 @@ class RoutePlannerApp:
             text="Moins de correspondances",
             variable=self.route_preference_var,
             value="Moins de correspondances",
-            ).grid(row=13, column=0, columnspan=2, sticky="w", padx=10)
+        ).grid(row=13, column=0, columnspan=2, sticky="w", padx=10)
 
         # Calculate Button
         calculate_button = ctk.CTkButton(
-            self.control_widgets_frame, text="Calculer l'itinéraire", command=self.calculate_route
+            self.control_widgets_frame,
+            text="Calculer l'itinéraire",
+            command=self.calculate_route,
         )
         calculate_button.grid(row=14, column=0, columnspan=2, padx=5, pady=20)
 
         # --- Display Frame Widgets ---
 
         # Display travel map (packed directly into display_frame, below its title)
-        self.map_canvas_frame = ctk.CTkFrame(self.display_frame) # Using CTkFrame
+        self.map_canvas_frame = ctk.CTkFrame(self.display_frame)  # Using CTkFrame
         self.map_canvas_frame.pack(pady=10, padx=10, fill="both", expand=True)
-        self.map_canvas = TkinterMapView(self.map_canvas_frame, width=400, height=260, corner_radius=0)
+        self.map_canvas = TkinterMapView(
+            self.map_canvas_frame, width=400, height=260, corner_radius=0
+        )
         # Definition of zoom scale and map position
         self.map_canvas.set_position(46.7111, 1.7191)
         self.map_canvas.set_zoom(5)
@@ -212,32 +243,45 @@ class RoutePlannerApp:
 
         # Pre-load arrival icon to avoid error at runtime
         try:
-            self.arrival_icon_image = tk.PhotoImage(file=r"C:\Users\nbaur\Documents\Travail Noelie\INSA\FIMI 2A\ISN\RailFinder\icon_arrivee.png")
+            self.arrival_icon_image = tk.PhotoImage(
+                file=r"C:\Users\nbaur\Documents\Travail Noelie\INSA\FIMI 2A\ISN\RailFinder\icon_arrivee.png"
+            )
         except tk.TclError as e:
-            print(f"Erreur lors du chargement de l'icône de l'arrivée: {e}. Le marqueur utilisera le style par défaut.")
-            self.arrival_icon_image = None # Set to None if loading fails
+            print(
+                f"Erreur lors du chargement de l'icône de l'arrivée: {e}. Le marqueur utilisera le style par défaut."
+            )
+            self.arrival_icon_image = None  # Set to None if loading fails
 
-
-        self.route_details_frame = ctk.CTkFrame(self.display_frame) # Using CTkFrame
-        ctk.CTkLabel(self.route_details_frame, text="Détails du trajet", font=("Arial", 16, "bold")).pack(pady=(5,0)) # Title for the text box
+        self.route_details_frame = ctk.CTkFrame(self.display_frame)  # Using CTkFrame
+        ctk.CTkLabel(
+            self.route_details_frame,
+            text="Détails du trajet",
+            font=("Arial", 16, "bold"),
+        ).pack(
+            pady=(5, 0)
+        )  # Title for the text box
         self.route_details_frame.pack(pady=10, padx=10, fill="both", expand=True)
 
         # Still tk.Text, will not be fully themed by CustomTkinter
         self.route_details_text = tk.Text(
-            self.route_details_frame, height=10, width=50, wrap=tk.WORD,
-            bg=self.get_ctk_color("CTkFrame"), # Try to match background of CTkFrames
-            fg=self.get_ctk_color("text"), # Try to match text color
-            insertbackground=self.get_ctk_color("text"), # Cursor color
-            selectbackground=self.get_ctk_color("selection_color"), # Selection highlight color
+            self.route_details_frame,
+            height=10,
+            width=50,
+            wrap=tk.WORD,
+            bg=self.get_ctk_color("CTkFrame"),  # Try to match background of CTkFrames
+            fg=self.get_ctk_color("text"),  # Try to match text color
+            insertbackground=self.get_ctk_color("text"),  # Cursor color
+            selectbackground=self.get_ctk_color(
+                "selection_color"
+            ),  # Selection highlight color
             relief="flat",
-            bd=0
+            bd=0,
         )
         self.route_details_text.pack(fill="both", expand=True, padx=5, pady=5)
         self.route_details_text.insert(
             tk.END, "Les détails de l'itinéraire s'afficheront ici..."
         )
-        self.route_details_text.config(state=tk.DISABLED,font=('Arial',16))
-
+        self.route_details_text.config(state=tk.DISABLED, font=("Arial", 16))
 
     def get_all_stop_names(self):
         """
@@ -249,15 +293,18 @@ class RoutePlannerApp:
         cursor.execute("SELECT stop_id, stop_name, stop_lat, stop_lon FROM stops")
         stops = [Stop(*row) for row in cursor.fetchall()]
         conn.close()
-        return sorted(list(set(stop.stop_name for stop in stops if stop.stop_name))) # Utiliser list(set(...)) pour les noms uniques
-
+        return sorted(
+            list(set(stop.stop_name for stop in stops if stop.stop_name))
+        )  # Utiliser list(set(...)) pour les noms uniques
 
     def add_stop(self):
         if len(self.intermediate_stops_entries) < 5:
             row_num = len(self.intermediate_stops_entries)
             stop_label = ctk.CTkLabel(self.stops_frame, text=f"Étape {row_num + 1}:")
             stop_label.grid(row=row_num, column=0, padx=5, pady=2, sticky="w")
-            stop_entry = ctk.CTkEntry(self.stops_frame, width=200) # Adjusted width for CTkEntry
+            stop_entry = ctk.CTkEntry(
+                self.stops_frame, width=200
+            )  # Adjusted width for CTkEntry
             stop_entry.grid(row=row_num, column=1, padx=5, pady=2, sticky="ew")
             stop_entry.bind("<KeyRelease>", self.auto_completion_proposition)
             stop_entry.bind("<Down>", self.focus_suggestions_listbox)
@@ -305,7 +352,8 @@ class RoutePlannerApp:
             departure_datetime_utc = departure_datetime.astimezone(pytz.utc)
         except ValueError:
             messagebox.showerror(
-                "Erreur", "Veuillez entrer une date et une heure de départ valides (JJ/MM/AAAA HH:MM)."
+                "Erreur",
+                "Veuillez entrer une date et une heure de départ valides (JJ/MM/AAAA HH:MM).",
             )
             return
         # ----------------------------------------
@@ -330,7 +378,9 @@ class RoutePlannerApp:
         details += f"Type de trains: {train_type}\n"
         details += f"Préférence: {preference}\n\n"
         details += "--- (Logique de calcul et résultats réels à implémenter) ---"
-        details+= self.planner.journey_search(from_stop_id,to_stop_id,departure_datetime_utc,datetime.timedelta(1))
+        details += self.planner.journey_search(
+            from_stop_id, to_stop_id, departure_datetime_utc, datetime.timedelta(1)
+        )
         self.route_details_text.insert(tk.END, details)
         self.route_details_text.config(state=tk.DISABLED)
 
@@ -344,14 +394,15 @@ class RoutePlannerApp:
         self.departure_city_entry.config(state="normal")
         self.arrival_city_entry.config(state="normal")
 
-
     def _perform_calculation_in_thread(self):
         """Effectue la logique de calcul d'itinéraire dans un thread séparé."""
         try:
             departure = self.departure_city_entry.get()
             arrival = self.arrival_city_entry.get()
             stops = [
-                entry.get() for _, entry in self.intermediate_stops_entries if entry.get()
+                entry.get()
+                for _, entry in self.intermediate_stops_entries
+                if entry.get()
             ]
             train_type = self.train_type_var.get()
             preference = self.route_preference_var.get()
@@ -367,16 +418,24 @@ class RoutePlannerApp:
                 departure_datetime = local_tz.localize(departure_datetime)
                 departure_datetime_utc = departure_datetime.astimezone(pytz.utc)
             except ValueError:
-                self.master.after(0, lambda: messagebox.showerror(
-                    "Erreur", "Veuillez entrer une date et une heure de départ valides (JJ/MM/AAAA HH:MM)."
-                ))
+                self.master.after(
+                    0,
+                    lambda: messagebox.showerror(
+                        "Erreur",
+                        "Veuillez entrer une date et une heure de départ valides (JJ/MM/AAAA HH:MM).",
+                    ),
+                )
                 self.master.after(0, self.reset_ui_after_calculation)
                 return
 
             if not departure or not arrival:
-                self.master.after(0, lambda: messagebox.showerror(
-                    "Erreur", "Veuillez entrer une ville de départ et une ville d'arrivée."
-                ))
+                self.master.after(
+                    0,
+                    lambda: messagebox.showerror(
+                        "Erreur",
+                        "Veuillez entrer une ville de départ et une ville d'arrivée.",
+                    ),
+                )
                 self.master.after(0, self.reset_ui_after_calculation)
                 return
 
@@ -394,17 +453,29 @@ class RoutePlannerApp:
             details += f"Préférence: {preference}\n\n"
 
             if from_stop_id and to_stop_id:
-                journey_result = self.planner.journey_search(from_stop_id, to_stop_id, departure_datetime_utc, datetime.timedelta(days=1))
+                journey_result = self.planner.journey_search(
+                    from_stop_id,
+                    to_stop_id,
+                    departure_datetime_utc,
+                    datetime.timedelta(days=1),
+                )
                 details += journey_result
             else:
-                details += "Impossible de trouver les IDs des arrêts de départ ou d'arrivée.\n"
+                details += (
+                    "Impossible de trouver les IDs des arrêts de départ ou d'arrivée.\n"
+                )
 
             # Mettre à jour l'interface via master.after
             self.master.after(0, lambda: self._update_ui_after_calculation(details))
 
         except Exception as e:
             print(f"Erreur lors du calcul de l'itinéraire : {e}")
-            self.master.after(0, lambda: messagebox.showerror("Erreur de calcul", f"Une erreur est survenue lors du calcul : {e}"))
+            self.master.after(
+                0,
+                lambda: messagebox.showerror(
+                    "Erreur de calcul", f"Une erreur est survenue lors du calcul : {e}"
+                ),
+            )
             self.master.after(0, self.reset_ui_after_calculation)
 
     def _update_ui_after_calculation(self, details):
@@ -495,7 +566,6 @@ class RoutePlannerApp:
                 self.active_entry.delete(0, tk.END)
                 self.active_entry.insert(0, self.suggestions_listbox.get(idx - 1))
 
-
     def navigate_down(self, event):
         cur = self.suggestions_listbox.curselection()
         size = self.suggestions_listbox.size()
@@ -518,13 +588,13 @@ class RoutePlannerApp:
         """
         try:
             theme_data = ctk.ThemeManager.theme["CTk"]
-            appearance_mode = ctk.get_appearance_mode() # "light" or "dark"
+            appearance_mode = ctk.get_appearance_mode()  # "light" or "dark"
 
             # Mappage des noms "logiques" aux clés réelles du thème CTk
             color_key_map = {
                 "CTkFrame": "fg_color",
                 "text": "text_color",
-                "selection_color": "button_color", # Couleur des boutons (souvent utilisée pour la sélection)
+                "selection_color": "button_color",  # Couleur des boutons (souvent utilisée pour la sélection)
             }
 
             ctk_color_key = color_key_map.get(key_name)
@@ -534,14 +604,16 @@ class RoutePlannerApp:
 
                 # Cas 1: C'est un tuple (couleur_claire, couleur_sombre) - standard CustomTkinter
                 if isinstance(color_value, tuple) and len(color_value) == 2:
-                    return color_value[0] if appearance_mode == "light" else color_value[1]
+                    return (
+                        color_value[0] if appearance_mode == "light" else color_value[1]
+                    )
 
                 # Cas 2: C'est une chaîne, potentiellement "couleur_claire couleur_sombre"
                 elif isinstance(color_value, str):
                     # Utiliser .strip().split() pour gérer les espaces multiples et les espaces de début/fin
                     parts = color_value.strip().split()
 
-                    if len(parts) == 2: # Format "couleur_claire couleur_sombre" trouvé
+                    if len(parts) == 2:  # Format "couleur_claire couleur_sombre" trouvé
                         return parts[0] if appearance_mode == "light" else parts[1]
                     else:
                         # C'est une chaîne de couleur unique (ex: "red", "#RRGGBB"), ou un format inattendu.
@@ -549,28 +621,39 @@ class RoutePlannerApp:
                         return color_value
 
             # Fallback pour les clés CTk connues qui n'ont pas pu être résolues ou les clés personnalisées
-            print(f"Attention: La couleur de thème CTk pour '{key_name}' (mappée à '{ctk_color_key}') n'a pas été trouvée ou n'a pas pu être analysée. Utilisation d'une couleur générique par défaut.")
+            print(
+                f"Attention: La couleur de thème CTk pour '{key_name}' (mappée à '{ctk_color_key}') n'a pas été trouvée ou n'a pas pu être analysée. Utilisation d'une couleur générique par défaut."
+            )
             if appearance_mode == "light":
                 # Fournir des noms de couleurs Tkinter standard pour le mode clair
-                if key_name == "CTkFrame": return "SystemButtonFace" # Fond de fenêtre par défaut
-                elif key_name == "text": return "black"
-                elif key_name == "selection_color": return "SystemHighlight" # Couleur de sélection par défaut
-                else: return "black" # Couleur de texte générique
+                if key_name == "CTkFrame":
+                    return "SystemButtonFace"  # Fond de fenêtre par défaut
+                elif key_name == "text":
+                    return "black"
+                elif key_name == "selection_color":
+                    return "SystemHighlight"  # Couleur de sélection par défaut
+                else:
+                    return "black"  # Couleur de texte générique
             else:
                 # Fournir des noms de couleurs Tkinter standard pour le mode sombre (approximations)
-                if key_name == "CTkFrame": return "#2b2b2b" # Fond gris foncé
-                elif key_name == "text": return "white"
-                elif key_name == "selection_color": return "#3e70cf" # Surlignage bleu plus foncé
-                else: return "white" # Couleur de texte générique
+                if key_name == "CTkFrame":
+                    return "#2b2b2b"  # Fond gris foncé
+                elif key_name == "text":
+                    return "white"
+                elif key_name == "selection_color":
+                    return "#3e70cf"  # Surlignage bleu plus foncé
+                else:
+                    return "white"  # Couleur de texte générique
 
         except Exception as e:
-            print(f"ERREUR CRITIQUE dans get_ctk_color pour '{key_name}': {e}. Utilisation d'une couleur par défaut absolue.")
+            print(
+                f"ERREUR CRITIQUE dans get_ctk_color pour '{key_name}': {e}. Utilisation d'une couleur par défaut absolue."
+            )
             # Fallback absolu en cas d'erreur inattendue
             if ctk.get_appearance_mode() == "light":
                 return "white"
             else:
                 return "#2b2b2b"
-
 
     # Function to get latitude and longitude by stop name
     def get_stop_lat_lon_by_name(self, stop_name):
@@ -581,7 +664,7 @@ class RoutePlannerApp:
         cursor = conn.cursor()
         cursor.execute(
             "SELECT stop_id, stop_name, stop_lat, stop_lon FROM stops WHERE stop_name = ? COLLATE NOCASE",
-            (stop_name,)
+            (stop_name,),
         )
         row = cursor.fetchone()
         conn.close()
@@ -590,7 +673,6 @@ class RoutePlannerApp:
             return stop.stop_lat, stop.stop_lon
         else:
             return None
-
 
     def tracage_map(self):
         # Clear existing markers and lines before drawing new ones
@@ -613,16 +695,22 @@ class RoutePlannerApp:
             self.arr_lat, self.arr_lon = arr_coords
             # Use the pre-loaded image if available, otherwise use default marker
             if self.arrival_icon_image:
-                self.map_canvas.set_marker(self.arr_lat, self.arr_lon, icon=self.arrival_icon_image, text=self.arrival)
+                self.map_canvas.set_marker(
+                    self.arr_lat,
+                    self.arr_lon,
+                    icon=self.arrival_icon_image,
+                    text=self.arrival,
+                )
             else:
-                self.map_canvas.set_marker(self.arr_lat, self.arr_lon, text=self.arrival)
+                self.map_canvas.set_marker(
+                    self.arr_lat, self.arr_lon, text=self.arrival
+                )
         else:
             print(f"Coordonnées non trouvées pour l'arrivée: {self.arrival}")
 
         # Draw a line between departure and arrival if both are found
         if dep_coords and arr_coords:
             self.map_canvas.set_path([dep_coords, arr_coords], width=3, color="blue")
-
 
     # Ajoute cette méthode dans ta classe RoutePlannerApp
     def get_stop_id_by_name(self, stop_name):
@@ -632,8 +720,7 @@ class RoutePlannerApp:
         conn = sqlite3.connect(self.db_path)
         cursor = conn.cursor()
         cursor.execute(
-            "SELECT stop_id FROM stops WHERE stop_name = ? COLLATE NOCASE",
-            (stop_name,)
+            "SELECT stop_id FROM stops WHERE stop_name = ? COLLATE NOCASE", (stop_name,)
         )
         row = cursor.fetchone()
         conn.close()
@@ -642,8 +729,10 @@ class RoutePlannerApp:
 
 if __name__ == "__main__":
     ctk.set_appearance_mode("System")  # Modes: "System" (default), "Dark", "Light"
-    ctk.set_default_color_theme("blue")  # Themes: "blue" (default), "dark-blue", "green"
+    ctk.set_default_color_theme(
+        "blue"
+    )  # Themes: "blue" (default), "dark-blue", "green"
 
-    root = ctk.CTk() # Use ctk.CTk() for the main window
+    root = ctk.CTk()  # Use ctk.CTk() for the main window
     app = RoutePlannerApp(root)
     root.mainloop()
