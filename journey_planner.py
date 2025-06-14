@@ -15,7 +15,9 @@ class JourneyPlanner:
 
     def search_stop(self, name: str, limit: int = 10):
         """
-        Get all stops from the database.
+        Get all stops that match the given name.
+        This searches for stops whose names start with the given name, sorted by relevance.
+        The relevance is determined by how closely the stop name matches the search term.
         """
         conn, cursor = self.db.get_connection()
         cursor.execute(
@@ -318,7 +320,7 @@ class JourneyPlanner:
         The path is represented as a list of tuples (stop_id, time, optional trip_id).
         If the trip_id is None, it means the stop is a transfer and the time is the arrival time at that stop.
         The heuristic is based on the geographical distance between the stops.
-        It assumes a straight line distance in km, converted to time in seconds, with a speed of 60 km/h.
+        It assumes a straight line distance in km, converted to time in seconds, with constant speed.
         """
         if mode not in ["fastest", "least_transfers"]:
             raise ValueError(
@@ -411,6 +413,7 @@ class JourneyPlanner:
                             final_lon,
                             current_ride_count + 1,
                             current_transfert_duration,
+                            mode_int=mode_int,
                         )
                         cost = int((v_datetime - departure).total_seconds() + h)
                         # Update best cost and push to queue
@@ -446,6 +449,7 @@ class JourneyPlanner:
                             final_lon,
                             current_ride_count,
                             current_transfert_duration + t[2],
+                            mode_int=mode_int,
                         )
                         cost = int((t_datetime - departure).total_seconds() + h)
                         # Update best cost and push to queue
@@ -619,6 +623,11 @@ class JourneyPlanner:
         return journey_steps
 
     def get_journey_summary(self, journey_steps: list[JourneyStep]):
+        """Get a summary of the journey steps.
+
+        This returns a formatted string summarizing the journey, including start and end stops,
+        transfers, and rides on routes.
+        """
         summary = []
         if journey_steps:
             start_step = journey_steps[0]
@@ -647,6 +656,10 @@ class JourneyPlanner:
         return "\n".join(summary) if summary else "No journey steps available."
 
     def get_journey_summary_fr(self, journey_steps: list[JourneyStep]):
+        """Get a summary of the journey steps in French.
+        This returns a formatted string summarizing the journey, including start and end stops,
+        transfers, and rides on routes.
+        """
         summary = []
         if journey_steps:
             start_step = journey_steps[0]
