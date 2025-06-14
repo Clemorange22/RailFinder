@@ -15,6 +15,16 @@ if __name__ == "__main__":
     # Tests for the JourneyPlanner class
     SEARCHES = [
         {
+            "name": "Rennes to Paris",
+            "from": "StopPoint:OCETGV INOUI-87471003",
+            "to": "StopPoint:OCETGV INOUI-87391003",
+        },
+        {
+            "name": "Rennes to Louvre Rivoli",
+            "from": "StopPoint:OCETGV INOUI-87471003",
+            "to": "IDFM:37354",
+        },
+        {
             "name": "Amsterdam to Rennes",
             "from": "2992194",
             "to": "StopPoint:OCETGV INOUI-87471003",
@@ -41,7 +51,7 @@ if __name__ == "__main__":
         p, execution_time = jp.journey_search(
             search["from"],
             search["to"],
-            datetime.datetime.now() + datetime.timedelta(hours=10),
+            datetime.datetime.now() + datetime.timedelta(hours=1),
         )
         if not p:
             print(f"No journey found for {search['name']}")

@@ -1,6 +1,12 @@
+from calendar import c
 import datetime
+import re
 import sqlite3
+from turtle import st
 from typing import Literal
+import tkinter as tk
+import pytz
+
 
 from database import Database
 from models import JourneyStep
@@ -275,7 +281,7 @@ class JourneyPlanner:
             raise ValueError(
                 f"Invalid mode_int: {mode_int}. Must be 0 (fastest) or 1 (least transfers)."
             )
-        ASSUMED_SPEED_KMH = 140
+        ASSUMED_SPEED_KMH = 100
         distance_km = geodistance(
             lat1, lon1, lat2, lon2
         )  # Distance between current stop and destination stop
@@ -305,6 +311,15 @@ class JourneyPlanner:
         """
         return t[0], t[1]
 
+    def update_gui(self, gui, path: list[tuple[float, float]]):
+        """
+        Update the GUI with the current state of the journey search.
+        If a GUI is provided, it will update the marker position and redraw the map.
+        """
+
+        gui.map_canvas.delete_all_path()
+        gui.map_canvas.set_path(path, color="purple", width=3)
+
     def journey_search(
         self,
         from_stop_id: str,
@@ -313,6 +328,7 @@ class JourneyPlanner:
         mode: 'Literal["fastest", "least_transfers"]' = "fastest",
         max_rides: int = -1,
         max_execution_time_seconds: int = 60,
+        gui=None,
     ):
         """
         Search for a journey from one stop to another with a maximum number of transfers.
@@ -343,7 +359,24 @@ class JourneyPlanner:
         visited = set()
         previous = {}
         previous[(from_stop_id, departure)] = (from_stop_id, departure)
-        final_lat, final_lon = self.get_stop_pos(to_stop_id, conn, cursor)
+        start_pos = self.get_stop_pos(from_stop_id)
+        stop_pos = self.get_stop_pos(from_stop_id, conn, cursor)
+        if not stop_pos:
+            return None, 0.0  # Stop not found, return immediately
+        final_lat, final_lon = stop_pos
+
+        if gui:
+            gui.master.after(0, gui.map_canvas.set_zoom, 5)
+            # calculate the medium position of the two stops
+            if start_pos:
+                start_lat, start_lon = start_pos
+                gui.master.after(
+                    0,
+                    gui.map_canvas.set_position,
+                    (final_lat + start_lat) / 2,
+                    (final_lon + start_lon) / 2,
+                )
+
         priority_queue = [
             (0, from_stop_id, departure, 0, 0)
         ]  # (cost, stop_id, time, ride_count, transfert_duration)
@@ -354,7 +387,8 @@ class JourneyPlanner:
 
         nodes_processed = 0
 
-        neighbor_search_window = datetime.timedelta(hours=1)
+        neighbor_search_window = datetime.timedelta(hours=5)
+        update_start_time = datetime.datetime.now()
         while len(priority_queue) > 0 and not found:
             if (
                 nodes_processed % 1000 == 0
@@ -369,6 +403,21 @@ class JourneyPlanner:
             current_ride_count = u[3]
             current_transfert_duration = u[4]
 
+            if gui and datetime.datetime.now() - update_start_time > datetime.timedelta(
+                milliseconds=40
+            ):
+                path = self.reconstruct_path(previous, current_stop_id, current_time)
+                journey_steps = self.get_journey_details(path)
+                geometry = self.get_journey_geometry(journey_steps)
+
+                gui.master.after(
+                    0,
+                    self.update_gui,
+                    gui,
+                    geometry,
+                )
+                update_start_time = datetime.datetime.now()
+
             # Skip if this path is not optimal
             if current_cost > best_cost.get(current_stop_id, float("inf")):
                 continue
@@ -376,9 +425,9 @@ class JourneyPlanner:
             if max_rides >= 0 and current_ride_count > max_rides + 1:
                 continue
 
-            print(
+            """print(
                 f"Processing node {nodes_processed}: {current_stop_id} at {current_time.strftime('%H:%M:%S')} with cost {current_cost}, ride count {current_ride_count}, transfer duration {current_transfert_duration}"
-            )
+            )"""
             if current_stop_id == to_stop_id:
                 found = True
             else:
@@ -474,17 +523,21 @@ class JourneyPlanner:
             ).total_seconds()
             return None, execution_time_seconds
         # Reconstruct the path
+        path = self.reconstruct_path(previous, current_stop_id, current_time)
+
+        execution_time_seconds = (
+            datetime.datetime.now() - start_execution_time
+        ).total_seconds()
+        return path, execution_time_seconds
+
+    def reconstruct_path(self, previous, current_stop_id, current_time):
         path = []
         current = (current_stop_id, current_time)
         while previous[self.get_node(current)] != self.get_node(current):
             path.insert(0, current)
             current = previous[self.get_node(current)]
         path.insert(0, current)
-
-        execution_time_seconds = (
-            datetime.datetime.now() - start_execution_time
-        ).total_seconds()
-        return path, execution_time_seconds
+        return path
 
     def get_next_departure(
         self,
@@ -515,22 +568,26 @@ class JourneyPlanner:
             conn.close()
         return result[0] if result else None
 
-    def get_journey_details(self, path: list):
+    def get_journey_details(self, path: list, tz: pytz.BaseTzInfo = pytz.UTC):
         """Take a path and return the details of the journey as a list of JourneyStep objects.
-        Each step in the path is a tuple of (stop_id, time, optional trip_id).
-        The trip_id is the id of the trip that departs from this stop (i.e., the trip after this stop),
-        except for the last stop, which has trip_id=None unless it's a transfer.
-        The times in the path are arrival times; departure_time should be fetched from the database.
+
+        Args:
+            path (list): A list of tuples representing the journey path.
+            timezone (str): The timezone to localize the dates.
+
+        Returns:
+            list[JourneyStep]: A list of JourneyStep objects with localized times.
         """
         if not path or len(path) < 2:
             return []
+
         journey_steps = []
         db = self.db
         for i in range(len(path) - 1):
             from_stop_id = path[i][0]
-            from_arrival_time = path[i][1]
+            from_arrival_time = tz.localize(path[i][1])
             to_stop_id = path[i + 1][0]
-            to_arrival_time = path[i + 1][1]
+            to_arrival_time = tz.localize(path[i + 1][1])
             trip_id = path[i][2] if len(path[i]) > 2 else None
 
             from_stop = db.get_stop_by_id(from_stop_id)
@@ -585,6 +642,8 @@ class JourneyPlanner:
                 departure_time = from_arrival_time.strftime("%H:%M:%S")
             journey_steps.append(
                 JourneyStep(
+                    start_time=from_arrival_time,
+                    end_time=to_arrival_time,
                     from_stop_id=from_stop_id,
                     from_stop_name=from_stop_name,
                     from_stop_lat=from_stop_lat,
@@ -608,6 +667,7 @@ class JourneyPlanner:
                     agency_name=agency_name,
                 )
             )
+
         # Remove the first step if its stop name is the same as the second step's stop name
         while (
             len(journey_steps) > 1
@@ -620,56 +680,118 @@ class JourneyPlanner:
             and journey_steps[-1].to_stop_name == journey_steps[-2].to_stop_name
         ):
             journey_steps.pop()
+
         return journey_steps
 
     def get_journey_summary(self, journey_steps: list[JourneyStep]):
         """Get a summary of the journey steps.
 
-        This returns a formatted string summarizing the journey, including start and end stops,
-        transfers, and rides on routes.
+        Returns:
+            str: A formatted string summarizing the journey, including start and end stops,
+            transfers, and rides on routes, as well as total duration and number of transfers.
         """
+        if not journey_steps:
+            return "❌ No journey steps available."
+
         summary = []
         if journey_steps:
             start_step = journey_steps[0]
+            end_step = journey_steps[-1]
+
+            start_time = start_step.start_time
+            end_time = end_step.end_time
+
+            # Calculate total duration
+            total_duration = (end_time - start_time).total_seconds() / 60
+
+            # Format duration in hours and minutes
+            if total_duration >= 60:
+                hours = int(total_duration // 60)
+                minutes = int(total_duration % 60)
+                duration_str = f"{hours} hours and {minutes} minutes"
+            else:
+                duration_str = f"{int(total_duration)} minutes"
+
+            # Calculate number of transfers
+            num_transfers = sum(1 for step in journey_steps if not step.transfer) - 1
+
             summary.append(
-                f"Start at {start_step.from_stop_name} ({start_step.from_stop_id}) at {start_step.departure_time}"
+                f"🚦 Start at: {start_step.from_stop_name} ({start_step.from_stop_id})\n"
+                f"⏰ Departure time: {start_step.departure_time}\n"
             )
             for step in journey_steps:
                 if step.transfer:
                     summary.append(
-                        f"Transfer from {step.from_stop_name} ({step.from_stop_id}) to {step.to_stop_name} ({step.to_stop_id}) during {step.transfer_time} seconds"
+                        f"🔄 Transfer:\n"
+                        f"  ➡️ From: {step.from_stop_name} ({step.from_stop_id})\n"
+                        f"  ➡️ To: {step.to_stop_name} ({step.to_stop_id})\n"
+                        f"  ⏳ Duration: {step.transfer_time} seconds\n"
                     )
                 else:
                     route_name = (
                         step.route_short_name or step.route_long_name or "Unknown Route"
                     )
                     summary.append(
-                        f"-------------------------------------------------------------------------\n"
-                        f"Ride on {route_name} ({step.route_id}) from {step.from_stop_name} ({step.from_stop_id}) to {step.to_stop_name} ({step.to_stop_id}).\n"
-                        f"Trip {step.trip_headsign} operated by {step.agency_name}, departing at {step.departure_time} and arriving at {step.arrival_time}\n"
-                        f"-------------------------------------------------------------------------"
+                        f"🚅 Ride:\n"
+                        f"  🛤️ Route: {route_name} ({step.route_id})\n"
+                        f"  ➡️ From: {step.from_stop_name} ({step.from_stop_id})\n"
+                        f"  ➡️ To: {step.to_stop_name} ({step.to_stop_id})\n"
+                        f"  🪧 Trip: {step.trip_headsign}\n"
+                        f"  🏢 Operator: {step.agency_name}\n"
+                        f"  ⏰ Departure: {step.departure_time}\n"
+                        f"  ⏱️ Arrival: {step.arrival_time}\n"
                     )
-            end_step = journey_steps[-1]
             summary.append(
-                f"End at {end_step.to_stop_name} ({end_step.to_stop_id}) at {end_step.arrival_time}"
+                f"🏁 End at: {end_step.to_stop_name} ({end_step.to_stop_id})\n"
+                f"⏱️ Arrival time: {end_step.arrival_time}\n"
             )
-        return "\n".join(summary) if summary else "No journey steps available."
+            summary.append(
+                f"📊 Total duration: {duration_str}\n"
+                f"🔢 Number of transfers: {num_transfers}\n"
+            )
+        return "\n".join(summary) if summary else "❌ No journey steps available."
 
     def get_journey_summary_fr(self, journey_steps: list[JourneyStep]):
         """Get a summary of the journey steps in French.
         This returns a formatted string summarizing the journey, including start and end stops,
-        transfers, and rides on routes.
+        transfers, and rides on routes, as well as total duration and number of transfers.
         """
+        if not journey_steps:
+            return "❌ Aucun trajet disponible."
+
         summary = []
         if journey_steps:
             start_step = journey_steps[0]
+            end_step = journey_steps[-1]
+
+            # Calculate total duration
+            start_time = start_step.start_time
+            end_time = end_step.end_time
+            total_duration = (end_time - start_time).total_seconds() / 60
+
+            # Format duration in hours and minutes
+            if total_duration >= 60:
+                hours = int(total_duration // 60)
+                minutes = int(total_duration % 60)
+                duration_str = f"{hours} heures et {minutes} minutes"
+            else:
+                duration_str = f"{int(total_duration)} minutes"
+
+            # Calculate number of transfers
+            num_transfers = sum(1 for step in journey_steps if not step.transfer) - 1
+
             summary.append(
-                f"Départ de {start_step.from_stop_name} ({start_step.from_stop_id}) à {start_step.departure_time}"
+                f"🚦 Départ:\n"
+                f"  🛑 De: {start_step.from_stop_name} ({start_step.from_stop_id})\n"
+                f"  ⏰ Heure de départ: {start_step.departure_time}\n"
             )
             for step in journey_steps:
                 if step.transfer:
                     summary.append(
-                        f"Correspondance de {step.from_stop_name} ({step.from_stop_id}) à {step.to_stop_name} ({step.to_stop_id}) pendant {step.transfer_time} secondes"
+                        f"🔄 Correspondance:\n"
+                        f"  ➡️ De: {step.from_stop_name} ({step.from_stop_id})\n"
+                        f"  ➡️ À: {step.to_stop_name} ({step.to_stop_id})\n"
+                        f"  ⏳ Durée: {step.transfer_time} secondes\n"
                     )
                 else:
                     route_name = (
@@ -678,16 +800,25 @@ class JourneyPlanner:
                         or "Ligne inconnue"
                     )
                     summary.append(
-                        f"-------------------------------------------------------------------------\n"
-                        f"Trajet sur {route_name} ({step.route_id}) de {step.from_stop_name} ({step.from_stop_id}) à {step.to_stop_name} ({step.to_stop_id}).\n"
-                        f"Trajet {step.trip_headsign} opéré par {step.agency_name}, départ à {step.departure_time} et arrivée à {step.arrival_time}\n"
-                        f"-------------------------------------------------------------------------"
+                        f"🚅 Trajet:\n"
+                        f"  🛤️ Ligne: {route_name} ({step.route_id})\n"
+                        f"  ➡️ De: {step.from_stop_name} ({step.from_stop_id})\n"
+                        f"  ➡️ À: {step.to_stop_name} ({step.to_stop_id})\n"
+                        f"  🪧 Trajet: {step.trip_headsign}\n"
+                        f"  🏢 Opérateur: {step.agency_name}\n"
+                        f"  ⏰ Départ: {step.departure_time}\n"
+                        f"  ⏱️ Arrivée: {step.arrival_time}\n"
                     )
-            end_step = journey_steps[-1]
             summary.append(
-                f"Arrivée à {end_step.to_stop_name} ({end_step.to_stop_id}) à {end_step.arrival_time}"
+                f"🏁 Arrivée:\n"
+                f"  🛑 À: {end_step.to_stop_name} ({end_step.to_stop_id})\n"
+                f"  ⏱️ Heure d'arrivée: {end_step.arrival_time}\n"
             )
-        return "\n".join(summary) if summary else "Aucun trajet disponible."
+            summary.append(
+                f"📊 Durée totale: {duration_str}\n"
+                f"🔢 Nombre de correspondances: {num_transfers}\n"
+            )
+        return "\n".join(summary) if summary else "❌ Aucun trajet disponible."
 
     def get_journey_step_geometry(
         self,

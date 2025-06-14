@@ -13,7 +13,7 @@ import threading
 
 
 class RoutePlannerApp:
-    def __init__(self, master, db_path="gtfs.db"):
+    def __init__(self, master: tk.Tk, db_path="gtfs.db"):
         self.master = master
         self.db_path = db_path
         self.liste_ville = self.get_all_stop_names()
@@ -275,6 +275,12 @@ class RoutePlannerApp:
                 self.route_details_text.delete(1.0, tk.END)
                 self.route_details_text.insert(tk.END, details)
                 self.route_details_text.config(state=tk.DISABLED)
+                self.journey_geometry = []
+                self.map_canvas.delete_all_marker()
+                self.map_canvas.delete_all_path()
+                self.map_canvas.set_position(46.7111, 1.7191)
+                self.map_canvas.set_zoom(5)
+                self.tracage_map()
 
             self.master.after(0, update_ui)
 
@@ -284,10 +290,12 @@ class RoutePlannerApp:
                     to_stop_id,
                     departure_datetime_utc,
                     "fastest" if preference == "Le plus rapide" else "least_transfers",
+                    max_execution_time_seconds=600,  # 10 minutes
+                    gui=self,
                 )
                 result_str = ""
                 if p is not None:
-                    journey_steps = self.planner.get_journey_details(p)
+                    journey_steps = self.planner.get_journey_details(p, tz=local_tz)
                     summary = self.planner.get_journey_summary_fr(journey_steps)
                     result_str += f"Temps d'exécution de la recherche: {execution_time:.2f} secondes\n"
                     result_str += summary

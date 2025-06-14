@@ -1,4 +1,7 @@
 from dataclasses import dataclass
+from datetime import date
+import datetime
+from tracemalloc import start
 from typing import Optional
 
 
@@ -152,6 +155,8 @@ class Shape:
 
 @dataclass
 class JourneyStep:
+    start_time: datetime.datetime
+    end_time: datetime.datetime
     from_stop_id: str
     from_stop_name: str
     from_stop_lat: float
