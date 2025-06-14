@@ -1,5 +1,5 @@
 import tkinter as tk
-from tkinter import ttk, messagebox
+from tkinter import BOTTOM, ttk, messagebox
 from tkintermapview import TkinterMapView
 from database import Database
 
@@ -13,10 +13,9 @@ import threading
 
 
 class RoutePlannerApp:
-    def __init__(self, master: tk.Tk, db_path="gtfs.db"):
+    def __init__(self, master: tk.Tk, db_path="railfinder.db"):
         self.master = master
         self.db_path = db_path
-        self.liste_ville = self.get_all_stop_names()
         self.db = Database(self.db_path)
         # self.db.load_and_prepare_data()
         self.planner = JourneyPlanner(self.db)
@@ -131,7 +130,9 @@ class RoutePlannerApp:
         self.route_details_text.config(state=tk.DISABLED)
         self.loading_label.destroy()
         # Chargement label + progressbar
+
         self.loading_frame = ttk.Frame(master, relief="raised", padding=15)
+
         self.loading_label = ttk.Label(
             self.loading_frame,
             text="🔄 Calcul de l'itinéraire...",
@@ -143,6 +144,10 @@ class RoutePlannerApp:
 
         self.loading_label.pack(pady=(0, 10))
         self.loading_bar.pack()
+
+        self.suggestions = []
+        self.suggestions_names = []
+        self.suggestions_history = set()
 
     def get_all_stop_names(self):
         """
@@ -161,7 +166,7 @@ class RoutePlannerApp:
         """
 
         def route_calculation():
-            self.loading_frame.place(relx=0.5, rely=0.5, anchor="center")
+            self.loading_frame.place(relx=0.5, rely=0.85, anchor="center")
             self.loading_bar.start(10)  # Démarrer la barre de chargement
             self.master.update_idletasks()
             self.departure_city_entry.config(state="disabled")
@@ -193,6 +198,17 @@ class RoutePlannerApp:
                 )
                 return
 
+            def update_ui_final():
+                self.route_details_text.config(state=tk.NORMAL)
+                self.route_details_text.insert(tk.END, result_str)
+                self.route_details_text.config(state=tk.DISABLED)
+                self.map_canvas.delete("all")
+                self.tracage_map()
+                self.loading_bar.stop()
+                self.loading_frame.place_forget()
+                self.departure_city_entry.config(state="normal")
+                self.arrival_city_entry.config(state="normal")
+
             if not departure or not arrival:
                 self.master.after(
                     0,
@@ -201,17 +217,40 @@ class RoutePlannerApp:
                         "Veuillez entrer une ville de départ et une ville d'arrivée.",
                     ),
                 )
+                self.master.after(0, update_ui_final)
                 return
 
-            from_stop_id = self.get_stop_id_by_name(departure)
-            to_stop_id = self.get_stop_id_by_name(arrival)
+            # Find stop IDs from self.suggestions
+            from_stop_id = None
+            for s in list(self.suggestions_history):
+                if s[1] == departure:
+                    from_stop_id = s[0]
+                    break
+
+            to_stop_id = None
+            for s in list(self.suggestions_history):
+                if s[1] == arrival:
+                    to_stop_id = s[0]
+                    break
+
+            if not from_stop_id or not to_stop_id:
+                self.master.after(
+                    0,
+                    lambda: messagebox.showerror(
+                        "Erreur",
+                        "Ville de départ ou d'arrivée non trouvée.",
+                    ),
+                )
+                self.master.after(0, self.loading_frame.place_forget)
+
+                return
             details = f"Calcul de l'itinéraire:\n"
             details += f"Départ: {departure}:{from_stop_id}\n"
             details += f"Arrivée: {arrival}:{to_stop_id}\n"
             details += f"Date et heure de départ (locale): {aware_local}\n"
             details += f"Date et heure de départ (UTC): {departure_datetime_utc}\n"
             details += f"Préférence: {preference}\n\n"
-            details += f"Calcul en cours...\n"
+            details += f"Calcul en cours... (Temps de calcul max: 5 minutes)\n"
 
             def update_ui():
                 self.route_details_text.config(state=tk.NORMAL)
@@ -233,7 +272,7 @@ class RoutePlannerApp:
                     to_stop_id,
                     departure_datetime_utc,
                     "fastest" if preference == "Le plus rapide" else "least_transfers",
-                    max_execution_time_seconds=600,  # 10 minutes
+                    max_execution_time_seconds=300,  # 5 minutes
                     gui=self,
                 )
                 result_str = ""
@@ -248,17 +287,6 @@ class RoutePlannerApp:
                         self.journey_geometry = line
                 else:
                     result_str += "Aucun trajet trouvé.\n"
-
-                def update_ui_final():
-                    self.route_details_text.config(state=tk.NORMAL)
-                    self.route_details_text.insert(tk.END, result_str)
-                    self.route_details_text.config(state=tk.DISABLED)
-                    self.map_canvas.delete("all")
-                    self.tracage_map()
-                    self.loading_bar.stop()
-                    self.loading_frame.place_forget()
-                    self.departure_city_entry.config(state="normal")
-                    self.arrival_city_entry.config(state="normal")
 
                 self.master.after(0, update_ui_final)
 
@@ -277,16 +305,15 @@ class RoutePlannerApp:
             self.suggestions_listbox.place_forget()
             return
 
-        filtered_suggestions = [
-            city
-            for city in self.liste_ville
-            if city.lower().startswith(input_text.lower())
-        ]
+        self.suggestions = self.planner.search_stop_custom(input_text)
+        self.suggestions_names = [s[1] for s in self.suggestions]
+        self.suggestions_history.update(set(self.suggestions))
+
         self.suggestions_listbox.delete(0, tk.END)
-        for city in filtered_suggestions:
+        for city in self.suggestions_names:
             self.suggestions_listbox.insert(tk.END, city)
 
-        if filtered_suggestions:
+        if self.suggestions_names:
             self.suggestions_listbox.selection_set(0)
             self.suggestions_listbox.activate(0)
             # Position dynamique sous le champ actif

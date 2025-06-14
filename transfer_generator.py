@@ -107,13 +107,13 @@ class TransferGenerator:
                       si.min_lon BETWEEN ? AND ? AND
                       s2.stop_id != ?
                       AND NOT (
-                          (s2.stop_id LIKE 'IDFM%' AND ? LIKE 'IDFM%')
-                       OR (s2.stop_id LIKE 'de%'   AND ? LIKE 'de%')
-                       OR (s2.stop_id LIKE 'NSR%'  AND ? LIKE 'NSR%')
-                       OR (s2.stop_id LIKE 'cz%'   AND ? LIKE 'cz%')
-                       OR (s2.stop_id LIKE 'ch%'   AND ? LIKE 'ch%')
-                       OR (s2.stop_id LIKE 'pl%'   AND ? LIKE 'pl%')
-                      )
+    (substr(s2.stop_id, 4) LIKE 'IDFM%' AND substr(?, 4) LIKE 'IDFM%')
+ OR (substr(s2.stop_id, 4) LIKE 'de%'   AND substr(?, 4) LIKE 'de%')
+ OR (substr(s2.stop_id, 4) LIKE 'NSR%'  AND substr(?, 4) LIKE 'NSR%')
+ OR (substr(s2.stop_id, 4) LIKE 'cz%'   AND substr(?, 4) LIKE 'cz%')
+ OR (substr(s2.stop_id, 4) LIKE 'ch%'   AND substr(?, 4) LIKE 'ch%')
+ OR (substr(s2.stop_id, 4) LIKE 'pl%'   AND substr(?, 4) LIKE 'pl%')
+)
                 """,
                 (
                     lat - delta_lat,

@@ -2,6 +2,11 @@ gtfs.db
 gtfs.db-journal
 profile_results.prof
 
+railfinder.db
+railfinder.db-journal
+railfinder_static.db
+railfinder_static.db-journal
+
 env/
 .vscode/
 # Byte-compiled / optimized / DLL files

@@ -34,6 +34,38 @@ class JourneyPlanner:
         conn.close()
         return stops
 
+    def search_stop_custom(self, name: str, limit: int = 10):
+        """
+        Get all stops that match the given name using a custom ranking algorithm.
+        This intends to improve the relevance of the search results, especially for stops with similar names.
+        """
+        stops = self.search_stop(name, limit)
+        cities_exceptions = {
+            "Paris": {"should_have_prefix": ["IDFM"], "should_not_have_prefix": []},
+            "Lyon": {"should_have_prefix": [], "should_not_have_prefix": ["IDFM"]},
+        }
+
+        # Apply custom sorting based on cities_exceptions
+        for city, criteria in cities_exceptions.items():
+            if name.startswith(city):
+                should_have_prefix = criteria["should_have_prefix"]
+                should_not_have_prefix = criteria["should_not_have_prefix"]
+
+                def custom_sort(stop):
+                    stop_id = stop[0]
+                    if any(stop_id.startswith(prefix) for prefix in should_have_prefix):
+                        return 0  # High priority
+                    if any(
+                        stop_id.startswith(prefix) for prefix in should_not_have_prefix
+                    ):
+                        return 2  # Low priority
+                    return 1  # Medium priority
+
+                stops.sort(key=custom_sort)
+                break
+
+        return stops
+
     def list_departures(
         self,
         stop_id: str,
@@ -581,14 +613,13 @@ class JourneyPlanner:
         """
         if not path or len(path) < 2:
             return []
-
         journey_steps = []
         db = self.db
         for i in range(len(path) - 1):
             from_stop_id = path[i][0]
-            from_arrival_time = tz.localize(path[i][1])
+            from_arrival_time = tz.fromutc(path[i][1])
             to_stop_id = path[i + 1][0]
-            to_arrival_time = tz.localize(path[i + 1][1])
+            to_arrival_time = tz.fromutc(path[i + 1][1])
             trip_id = path[i][2] if len(path[i]) > 2 else None
 
             from_stop = db.get_stop_by_id(from_stop_id)

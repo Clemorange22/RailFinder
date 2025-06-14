@@ -13,7 +13,7 @@ from tqdm import tqdm
 
 
 class Database:
-    def __init__(self, db_name="gtfs.db"):
+    def __init__(self, db_name="railfinder.db"):
         self.db_name = db_name
 
     def reset_database(self):
@@ -316,7 +316,7 @@ class Database:
                                 values = [row[col] for col in columns]
                                 if should_prefix_columns:
                                     values = [
-                                        f"{id}/{val}" if prefix else val
+                                        f"{id:02}/{val}" if prefix else val
                                         for val, prefix in zip(
                                             values, should_prefix_columns
                                         )
