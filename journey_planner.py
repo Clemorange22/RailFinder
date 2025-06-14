@@ -316,9 +316,10 @@ class JourneyPlanner:
         Update the GUI with the current state of the journey search.
         If a GUI is provided, it will update the marker position and redraw the map.
         """
-
+        journey_steps = self.get_journey_details(path)
+        geometry = self.get_journey_geometry(journey_steps)
         gui.map_canvas.delete_all_path()
-        gui.map_canvas.set_path(path, color="purple", width=3)
+        gui.map_canvas.set_path(geometry, color="purple", width=3)
 
     def journey_search(
         self,
@@ -360,9 +361,11 @@ class JourneyPlanner:
         previous = {}
         previous[(from_stop_id, departure)] = (from_stop_id, departure)
         start_pos = self.get_stop_pos(from_stop_id)
-        stop_pos = self.get_stop_pos(from_stop_id, conn, cursor)
+        if not start_pos:
+            return None, 0.0
+        stop_pos = self.get_stop_pos(to_stop_id, conn, cursor)
         if not stop_pos:
-            return None, 0.0  # Stop not found, return immediately
+            return None, 0.0
         final_lat, final_lon = stop_pos
 
         if gui:
@@ -407,14 +410,12 @@ class JourneyPlanner:
                 milliseconds=40
             ):
                 path = self.reconstruct_path(previous, current_stop_id, current_time)
-                journey_steps = self.get_journey_details(path)
-                geometry = self.get_journey_geometry(journey_steps)
 
                 gui.master.after(
                     0,
                     self.update_gui,
                     gui,
-                    geometry,
+                    path,
                 )
                 update_start_time = datetime.datetime.now()
 
