@@ -7,7 +7,6 @@
     "Sweden" : "https://data.public-transport.earth/gtfs/se",
     "Germany" : "https://data.public-transport.earth/gtfs/de",
     "Estonia" : "https://data.public-transport.earth/gtfs/ee",
-    "Aura" : "https://mobi-iti-ara.okina.fr/static/mobiiti_technique/DAT_AURA_GTFS_ExportAOM.zip",
     "FlixBus" : "https://gtfs.gis.flix.tech/gtfs_generic_eu.zip",
     "Intercites" : "https://eu.ftp.opendatasoft.com/sncf/plandata/export-intercites-gtfs-last.zip",
     "TER" : "https://eu.ftp.opendatasoft.com/sncf/plandata/export-ter-gtfs-last.zip",
@@ -17,8 +16,8 @@
     "Renfe France" : "https://ssl.renfe.com/gtransit/Fichero_AV_INT/Renfe_AVE_Int.zip",
     "BlaBlaCar Bus" : "https://bus-api.blablacar.com/gtfs.zip",
     "Trenitalia France" : "https://thello.axelor.com/public/gtfs/gtfs.zip",
-    "Denmark" : "https://data.public-transport.earth/gtfs/dk",
-    "Finland" : "https://data.public-transport.earth/gtfs/fi"
+        "Denmark" : "https://data.public-transport.earth/gtfs/dk"
+
 }
 
 
