@@ -10,65 +10,50 @@ if __name__ == "__main__":
     db = Database()
     data_path = "data_sources.json"
     db.update_database(data_path, force_update=False)
-    db.create_gtfs_indexes()
 
     jp = JourneyPlanner(db)
 
-    """print("Rennes to Louvres Rivoli journey search")
-    p = jp.journey_search(
-        "StopPoint:OCETGV INOUI-87471003",
-        "IDFM:37354",
-        datetime.datetime.now() + datetime.timedelta(hours=10),
-        datetime.timedelta(hours=2),
-    )
-    if not p:
-        print("No journey found")
-        exit(1)
-    details = jp.get_journey_details(p)
-    summary = jp.get_journey_summary(details)
-    print(summary)
-    print("Montparnasse Bienvenue to Louvre Rivoli journey search")
-    p = jp.journey_search(
-        "IDFM:462996",
-        "IDFM:22092",
-        datetime.datetime.now() + datetime.timedelta(hours=10),
-        datetime.timedelta(hours=2),
-    )
-    if not p:
-        print("No journey found")
-        exit(1)
-    details = jp.get_journey_details(p)
-    summary = jp.get_journey_summary(details)
-    print(summary)"""
-    """print("Brest to Bruxelles journey search")
-    p = jp.journey_search(
-        "StopArea:OCE87474007",
-        "StopArea:OCE88140010",
-        datetime.datetime.now() + datetime.timedelta(hours=10),
-        datetime.timedelta(hours=2),
-    )
-    if not p:
-        print("No journey found")
-        exit(1)
-    details = jp.get_journey_details(p)
-    summary = jp.get_journey_summary(details)
-    geometry = jp.get_journey_geometry(details)
-    print(summary)
-    print(geometry)"""
-    print("Amsterdam to Rennes journey search")
-    p, execution_time = jp.journey_search(
-        "2992194",
-        "StopPoint:OCETGV INOUI-87471003",
-        datetime.datetime.now() + datetime.timedelta(hours=10),
-    )
-    if not p:
-        print("No journey found")
-    else:
-        print(f"Journey found in {execution_time:.2f} seconds")
-        details = jp.get_journey_details(p)
-        summary = jp.get_journey_summary(details)
-        geometry = jp.get_journey_geometry(details)
-        print(summary)
-        print(geometry)
+    # Tests for the JourneyPlanner class
+    SEARCHES = [
+        {
+            "name": "Amsterdam to Rennes",
+            "from": "2992194",
+            "to": "StopPoint:OCETGV INOUI-87471003",
+        },
+        {
+            "name": "Paris-Nord to Lyon Part-Dieu",
+            "from": "2993634",
+            "to": "8772319",
+        },
+        # Now farther apart, in Europe
+        {
+            "name": "Berlin to Stockholm",
+            "from": "394a5408-d778-4959-a63e-973253443ed2",
+            "to": "NSR:Quay:100390",
+        },
+        {
+            "name": "Madrid to Venice",
+            "from": "MDS",
+            "to": "3012019",
+        },
+    ]
+    print("Starting journey search tests...")
+    for search in SEARCHES:
+        p, execution_time = jp.journey_search(
+            search["from"],
+            search["to"],
+            datetime.datetime.now() + datetime.timedelta(hours=10),
+        )
+        if not p:
+            print(f"No journey found for {search['name']}")
+        else:
+            print(f"Journey found for {search['name']} in {execution_time:.2f} seconds")
+            details = jp.get_journey_details(p)
+            summary = jp.get_journey_summary(details)
+            geometry = jp.get_journey_geometry(details)
+            print(summary)
+            print(geometry)
+        input("Press Enter to continue...")
+    print("All tests completed successfully.")
 
     print("placeholder for stopping the debugger")
