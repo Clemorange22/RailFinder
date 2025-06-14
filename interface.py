@@ -180,6 +180,21 @@ class RoutePlannerApp:
             # --- Ajout récupération date et heure ---
             date_str = self.departure_date_entry.get()
             time_str = self.departure_time_entry.get()
+
+            result_str = None
+
+            def update_ui_final():
+                self.route_details_text.config(state=tk.NORMAL)
+                if result_str:
+                    self.route_details_text.insert(tk.END, result_str)
+                self.route_details_text.config(state=tk.DISABLED)
+                self.map_canvas.delete("all")
+                self.tracage_map()
+                self.loading_bar.stop()
+                self.loading_frame.place_forget()
+                self.departure_city_entry.config(state="normal")
+                self.arrival_city_entry.config(state="normal")
+
             try:
                 departure_datetime_local = datetime.datetime.strptime(
                     f"{date_str} {time_str}", "%d/%m/%Y %H:%M"
@@ -196,18 +211,8 @@ class RoutePlannerApp:
                         "Veuillez entrer une date et une heure de départ valides (JJ/MM/AAAA HH:MM).",
                     ),
                 )
+                self.master.after(0, update_ui_final)
                 return
-
-            def update_ui_final():
-                self.route_details_text.config(state=tk.NORMAL)
-                self.route_details_text.insert(tk.END, result_str)
-                self.route_details_text.config(state=tk.DISABLED)
-                self.map_canvas.delete("all")
-                self.tracage_map()
-                self.loading_bar.stop()
-                self.loading_frame.place_forget()
-                self.departure_city_entry.config(state="normal")
-                self.arrival_city_entry.config(state="normal")
 
             if not departure or not arrival:
                 self.master.after(
@@ -241,8 +246,7 @@ class RoutePlannerApp:
                         "Ville de départ ou d'arrivée non trouvée.",
                     ),
                 )
-                self.master.after(0, self.loading_frame.place_forget)
-
+                self.master.after(0, update_ui_final)
                 return
             details = f"Calcul de l'itinéraire:\n"
             details += f"Départ: {departure}:{from_stop_id}\n"
