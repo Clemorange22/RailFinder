@@ -213,8 +213,9 @@ class TransferGenerator:
         conn, cur = self.db.get_connection()
         cur.executemany(
             "INSERT OR IGNORE INTO transfers (from_stop_id, to_stop_id, transfer_type, min_transfer_time) VALUES (?, ?, 2, ?)",
-            [(a, b, self.transfer_time_sec) for a, b in all_insertions],
+            [(a, b, self.transfer_time_sec) for a, b in all_insertions]
+            + [(b, a, self.transfer_time_sec) for a, b in all_insertions],
         )
         conn.commit()
         conn.close()
-        print(f"Inserted {len(all_insertions)} new transfers.")
+        print(f"Inserted {len(all_insertions) * 2} new transfers.")
