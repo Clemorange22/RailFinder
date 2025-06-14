@@ -412,7 +412,7 @@ class JourneyPlanner:
                     (final_lon + start_lon) / 2,
                 )
 
-                zoom_level = 6
+                zoom_level = 7
 
                 gui.master.after(0, gui.map_canvas.set_zoom, zoom_level)
 
