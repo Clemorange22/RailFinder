@@ -9,6 +9,7 @@ from journey_planner import JourneyPlanner
 import datetime
 import os
 import pytz
+import threading
 
 
 class RoutePlannerApp:
@@ -43,7 +44,7 @@ class RoutePlannerApp:
         # --- Control Frame Widgets ---
 
         # Departure City
-        ttk.Label(control_frame, text="Ville de départ :").grid(
+        ttk.Label(control_frame, text="Ville/Arrêt de départ :").grid(
             row=0, column=0, padx=5, pady=5, sticky="w"
         )
         self.departure_city_entry = ttk.Entry(control_frame, width=30)
@@ -60,7 +61,7 @@ class RoutePlannerApp:
         self.suggestions_listbox.bind("<Down>", self.navigate_down)
 
         # Arrival City
-        ttk.Label(control_frame, text="Ville d'arrivée :").grid(
+        ttk.Label(control_frame, text="Ville/Arrêt d'arrivée :").grid(
             row=1, column=0, padx=5, pady=5, sticky="w"
         )
         self.arrival_city_entry = ttk.Entry(control_frame, width=30)
@@ -101,30 +102,6 @@ class RoutePlannerApp:
             control_frame, text="Supprimer la dernière étape", command=self.remove_stop
         )
         self.remove_stop_button.grid(row=6, column=1, padx=5, pady=5, sticky="e")
-
-        # Train Type
-        ttk.Label(control_frame, text="Type de trains:").grid(
-            row=7, column=0, columnspan=2, padx=5, pady=10, sticky="w"
-        )
-        self.train_type_var = tk.StringVar(value="TGV + TER")
-        ttk.Radiobutton(
-            control_frame,
-            text="TGV uniquement",
-            variable=self.train_type_var,
-            value="TGV",
-        ).grid(row=8, column=0, columnspan=2, sticky="w", padx=10)
-        ttk.Radiobutton(
-            control_frame,
-            text="TER uniquement",
-            variable=self.train_type_var,
-            value="TER",
-        ).grid(row=9, column=0, columnspan=2, sticky="w", padx=10)
-        ttk.Radiobutton(
-            control_frame,
-            text="TGV + TER",
-            variable=self.train_type_var,
-            value="TGV + TER",
-        ).grid(row=10, column=0, columnspan=2, sticky="w", padx=10)
 
         # Route Preference
         ttk.Label(control_frame, text="Préférence de trajet:").grid(
@@ -232,89 +209,108 @@ class RoutePlannerApp:
         """Calculates the route based on the data entered by the user.
         Displays the route details and draws the route on the map.
         """
-        self.loading_frame.place(relx=0.5, rely=0.5, anchor="center")
-        self.loading_bar.start(10)  # Démarrer la barre de chargement
-        self.master.update_idletasks()
-        self.departure_city_entry.config(state="disabled")
-        self.arrival_city_entry.config(state="disabled")
 
-        departure = self.departure_city_entry.get()
-        arrival = self.arrival_city_entry.get()
-        stops = [
-            entry.get() for _, entry in self.intermediate_stops_entries if entry.get()
-        ]
-        train_type = self.train_type_var.get()
-        preference = self.route_preference_var.get()
+        def route_calculation():
+            self.loading_frame.place(relx=0.5, rely=0.5, anchor="center")
+            self.loading_bar.start(10)  # Démarrer la barre de chargement
+            self.master.update_idletasks()
+            self.departure_city_entry.config(state="disabled")
+            self.arrival_city_entry.config(state="disabled")
 
-        # --- Ajout récupération date et heure ---
-        date_str = self.departure_date_entry.get()
-        time_str = self.departure_time_entry.get()
-        try:
-            # On suppose que l'utilisateur saisit la date/heure en heure locale France
-            departure_datetime_local = datetime.datetime.strptime(
-                f"{date_str} {time_str}", "%d/%m/%Y %H:%M"
-            )
-            # Ajout : conversion naïve locale -> UTC naïf
-            local_tz = pytz.timezone("Europe/Paris")
-            aware_local = local_tz.localize(departure_datetime_local)
-            aware_utc = aware_local.astimezone(pytz.utc)
-            # On retire le tzinfo pour obtenir un datetime naïf en UTC
-            departure_datetime_utc = aware_utc.replace(tzinfo=None)
-        except ValueError:
-            messagebox.showerror(
-                "Erreur",
-                "Veuillez entrer une date et une heure de départ valides (JJ/MM/AAAA HH:MM).",
-            )
-            return
-        # ----------------------------------------
+            departure = self.departure_city_entry.get()
+            arrival = self.arrival_city_entry.get()
+            stops = [
+                entry.get()
+                for _, entry in self.intermediate_stops_entries
+                if entry.get()
+            ]
 
-        if not departure or not arrival:
-            messagebox.showerror(
-                "Erreur", "Veuillez entrer une ville de départ et une ville d'arrivée."
-            )
-            return
+            preference = self.route_preference_var.get()
 
-        self.route_details_text.config(state=tk.NORMAL)
-        self.route_details_text.delete(1.0, tk.END)
-        from_stop_id = self.get_stop_id_by_name(departure)
-        to_stop_id = self.get_stop_id_by_name(arrival)
-        details = f"Calcul de l'itinéraire:\n"
-        details += f"Départ: {departure}:{from_stop_id}\n"
-        details += f"Arrivée: {arrival}:{to_stop_id}\n"
-        details += f"Date et heure de départ (locale): {aware_local}\n"
-        details += f"Date et heure de départ (UTC): {departure_datetime_utc}\n"
-        if stops:
-            details += f"Étapes: {', '.join(stops)}\n"
-        details += f"Type de trains: {train_type}\n"
-        details += f"Préférence: {preference}\n\n"
-        if from_stop_id and to_stop_id:
-            p, execution_time = self.planner.journey_search(
-                from_stop_id, to_stop_id, departure_datetime_utc
-            )
-            if p is not None:
-                journey_steps = self.planner.get_journey_details(p)
-                summary = self.planner.get_journey_summary(journey_steps)
-                details += f"Temps d'exécution de la recherche: {execution_time:.2f} secondes\n"
-                details += summary
-                self.journey_geometry = []
-                line = self.planner.get_journey_geometry(journey_steps)
-                if line:
-                    details += "\n\nTracé du trajet:\n"
-                    details += str(line)
-                    self.journey_geometry = line
+            # --- Ajout récupération date et heure ---
+            date_str = self.departure_date_entry.get()
+            time_str = self.departure_time_entry.get()
+            try:
+                departure_datetime_local = datetime.datetime.strptime(
+                    f"{date_str} {time_str}", "%d/%m/%Y %H:%M"
+                )
+                local_tz = pytz.timezone("Europe/Paris")
+                aware_local = local_tz.localize(departure_datetime_local)
+                aware_utc = aware_local.astimezone(pytz.utc)
+                departure_datetime_utc = aware_utc.replace(tzinfo=None)
+            except ValueError:
+                self.master.after(
+                    0,
+                    lambda: messagebox.showerror(
+                        "Erreur",
+                        "Veuillez entrer une date et une heure de départ valides (JJ/MM/AAAA HH:MM).",
+                    ),
+                )
+                return
 
-        self.route_details_text.insert(tk.END, details)
-        self.route_details_text.config(state=tk.DISABLED)
+            if not departure or not arrival:
+                self.master.after(
+                    0,
+                    lambda: messagebox.showerror(
+                        "Erreur",
+                        "Veuillez entrer une ville de départ et une ville d'arrivée.",
+                    ),
+                )
+                return
 
-        self.map_canvas.delete("all")
-        self.tracage_map()
-        # Simuler le calcul de l'itinéraire
-        self.loading_bar.stop()
-        self.loading_frame.place_forget()
+            from_stop_id = self.get_stop_id_by_name(departure)
+            to_stop_id = self.get_stop_id_by_name(arrival)
+            details = f"Calcul de l'itinéraire:\n"
+            details += f"Départ: {departure}:{from_stop_id}\n"
+            details += f"Arrivée: {arrival}:{to_stop_id}\n"
+            details += f"Date et heure de départ (locale): {aware_local}\n"
+            details += f"Date et heure de départ (UTC): {departure_datetime_utc}\n"
+            if stops:
+                details += f"Étapes: {', '.join(stops)}\n"
+            details += f"Préférence: {preference}\n\n"
+            details += f"Calcul en cours...\n"
 
-        # Réactiver les champs de saisie
-        self.departure_city_entry.config(state="normal")
-        self.arrival_city_entry.config(state="normal")
+            def update_ui():
+                self.route_details_text.config(state=tk.NORMAL)
+                self.route_details_text.delete(1.0, tk.END)
+                self.route_details_text.insert(tk.END, details)
+                self.route_details_text.config(state=tk.DISABLED)
+
+            self.master.after(0, update_ui)
+
+            if from_stop_id and to_stop_id:
+                p, execution_time = self.planner.journey_search(
+                    from_stop_id, to_stop_id, departure_datetime_utc
+                )
+                result_str = ""
+                if p is not None:
+                    journey_steps = self.planner.get_journey_details(p)
+                    summary = self.planner.get_journey_summary_fr(journey_steps)
+                    result_str += f"Temps d'exécution de la recherche: {execution_time:.2f} secondes\n"
+                    result_str += summary
+                    self.journey_geometry = []
+                    line = self.planner.get_journey_geometry(journey_steps)
+                    if line:
+                        # result_str += "\n\nTracé du trajet:\n"
+                        # result_str += str(line)
+                        self.journey_geometry = line
+                else:
+                    result_str += "Aucun trajet trouvé.\n"
+
+                def update_ui_final():
+                    self.route_details_text.config(state=tk.NORMAL)
+                    self.route_details_text.insert(tk.END, result_str)
+                    self.route_details_text.config(state=tk.DISABLED)
+                    self.map_canvas.delete("all")
+                    self.tracage_map()
+                    self.loading_bar.stop()
+                    self.loading_frame.place_forget()
+                    self.departure_city_entry.config(state="normal")
+                    self.arrival_city_entry.config(state="normal")
+
+                self.master.after(0, update_ui_final)
+
+        threading.Thread(target=route_calculation).start()
 
     def auto_completion_proposition(self, event):
         """Displays auto-completion suggestions for the departure, arrival, and intermediate stop entry fields.
@@ -443,10 +439,10 @@ class RoutePlannerApp:
             )
             self.map_canvas.set_marker(arr_lat, arr_lon, icon=icon_path)
 
+        self.map_canvas.delete_all_path()
         if len(self.journey_geometry) > 0:
-            self.map_canvas.delete_all_path()
             path_1 = self.map_canvas.set_path(
-                self.journey_geometry, color="blue", width=2
+                self.journey_geometry, color="blue", width=5
             )
 
     def get_stop_id_by_name(self, stop_name):
