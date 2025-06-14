@@ -412,6 +412,10 @@ class JourneyPlanner:
                     (final_lon + start_lon) / 2,
                 )
 
+                zoom_level = 6
+
+                gui.master.after(0, gui.map_canvas.set_zoom, zoom_level)
+
         priority_queue = [
             (0, from_stop_id, departure, 0, 0)
         ]  # (cost, stop_id, time, ride_count, transfert_duration)
