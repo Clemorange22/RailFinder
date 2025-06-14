@@ -1,9 +1,15 @@
 # RailFinder
+
+<p align="center">
+  <img src="preview.png" alt="RailFinder Interface" width="600">
+</p>
+
 A simple rail (and other public transport) trip calculator.
+
 
 Built using Python and Tkinter.
 
-Group ISN (Informatique et société Numérique) project at INSA Lyon, France. (2nd year)
+Group ISN (Informatique et Société Numérique) project at INSA Lyon, France. (2nd year)
 
 ### Features
 - Journey planning using GTFS data.
