@@ -43,6 +43,8 @@ python main.py
 - Approximately 40GB of free disk space.
 - A stable internet connection.
 
+Downloading GTFS data can take some time (~15-20 minutes depending on your internet speed and the number of sources).
+
 The database updates automatically if it is older than 24 hours. To reset the database, delete the `railfinder.db` file.
 
 If you prefer using a precomputed database, name it `railfinder_static.db` and place it in the same directory as `main.py`. The application will then use the static database without downloading GTFS data.
