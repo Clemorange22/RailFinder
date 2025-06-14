@@ -1,5 +1,6 @@
 import datetime
 import sqlite3
+from typing import Literal
 
 from database import Database
 from models import JourneyStep
@@ -217,22 +218,26 @@ class JourneyPlanner:
 
     def parse_gtfs_time(
         self, date_reference: datetime.datetime, time_str: str
-    ) -> datetime.datetime:
+    ) -> datetime.datetime | None:
         """
         Parse a GTFS time string (HH:MM:SS) into a datetime object.
-        A GTFS time string does not include a date, so we assume the date is today, unless the hour is more than 23.
+        A GTFS time string does not include a date, so we assume the date is today, unless the hour exceeds 23.
+        If the hour exceeds 23, we calculate the number of days to add and adjust the hour accordingly.
         """
         today = date_reference.date()
         time_parts = time_str.split(":")
         if len(time_parts) == 3:
             hour, minute, second = map(int, time_parts)
             if hour > 23:
-                # If the hour is more than 23, we assume it's the next day
+                # Calculate the number of days to add and adjust the hour
+                days_to_add = hour // 24
+                adjusted_hour = hour % 24
                 return datetime.datetime.combine(
-                    today + datetime.timedelta(days=1),
-                    datetime.time(hour - 24, minute, second),
+                    today + datetime.timedelta(days=days_to_add),
+                    datetime.time(adjusted_hour, minute, second),
                 )
             return datetime.datetime.combine(today, datetime.time(hour, minute, second))
+        return None
         raise ValueError("Invalid GTFS time format. Expected HH:MM:SS.")
 
     def get_stop_pos(
@@ -248,17 +253,49 @@ class JourneyPlanner:
         return cursor.fetchone()
 
     def heuristic(
-        self, lat1, lon1, lat2, lon2, ride_number: int, transfert_duration: int
+        self,
+        lat1,
+        lon1,
+        lat2,
+        lon2,
+        ride_number: int,
+        transfert_duration: int,
+        mode_int: int = 0,
     ) -> float:
-        ASSUMED_SPEED_KMH = 60  # Assumed speed in km/h for the heuristic
-        RIDE_PENALTY_MINUTES = 3  # Penalty for each ride in minutes
-        # For the transfer penalty, we use a multiplier instead of a fixed penalty
-        TRANSFER_PENALTY_MULTIPLIER = 3  # Transfer penalty multiplier
-        return (
-            geodistance(lat1, lon1, lat2, lon2) / ASSUMED_SPEED_KMH * 3600
-            + ride_number * 60 * RIDE_PENALTY_MINUTES
+        """
+        Heuristic function for the A* algorithm.
+        This function calculates the heuristic cost based on the geographical distance between the current stop and the destination stop.
+        It assumes a straight line distance in km, converted to time in seconds, with a speed of 60 km/h.
+        The ride_number is used to add a penalty for each ride, and the transfert_duration is used to add a penalty for transfers.
+        The mode_int parameter is used to differentiate between the two modes of the journey search, where 0 is for the fastest route and 1 is for the least transfers.
+        """
+        if mode_int not in [0, 1]:
+            raise ValueError(
+                f"Invalid mode_int: {mode_int}. Must be 0 (fastest) or 1 (least transfers)."
+            )
+        ASSUMED_SPEED_KMH = 140
+        distance_km = geodistance(
+            lat1, lon1, lat2, lon2
+        )  # Distance between current stop and destination stop
+
+        # Adjust ride penalty dynamically based on the number of rides
+        RIDE_PENALTY_MINUTES_BASE = 3 if mode_int == 0 else 5
+        RIDE_PENALTY_ADJUSTMENT_FACTOR = 1 + (
+            ride_number / 10
+        )  # Increase penalty for more rides
+        adjusted_ride_penalty_minutes = (
+            RIDE_PENALTY_MINUTES_BASE * RIDE_PENALTY_ADJUSTMENT_FACTOR
+        )
+
+        # Scale transfer duration penalty based on total journey distance
+
+        TRANSFER_PENALTY_MULTIPLIER = 1.5 if mode_int == 0 else 2.0
+        h_convenience = (
+            ride_number * 60 * adjusted_ride_penalty_minutes
             + transfert_duration * TRANSFER_PENALTY_MULTIPLIER
         )
+
+        return distance_km / ASSUMED_SPEED_KMH * 3600 + h_convenience
 
     def get_node(self, t: tuple):
         """
@@ -271,8 +308,9 @@ class JourneyPlanner:
         from_stop_id: str,
         to_stop_id: str,
         departure: datetime.datetime,
+        mode: 'Literal["fastest", "least_transfers"]' = "fastest",
         max_rides: int = -1,
-        max_execution_time_seconds: int = 3600,
+        max_execution_time_seconds: int = 60,
     ):
         """
         Search for a journey from one stop to another with a maximum number of transfers.
@@ -282,6 +320,17 @@ class JourneyPlanner:
         The heuristic is based on the geographical distance between the stops.
         It assumes a straight line distance in km, converted to time in seconds, with a speed of 60 km/h.
         """
+        if mode not in ["fastest", "least_transfers"]:
+            raise ValueError(
+                f"Invalid mode: {mode}. Must be 'fastest' or 'least_transfers'."
+            )
+
+        if mode == "least_transfers":
+            max_rides = 5
+            mode_int = 1
+        else:
+            max_rides = 20
+            mode_int = 0
         start_execution_time = datetime.datetime.now()
         conn, cursor = self.db.get_connection()
 
@@ -324,6 +373,10 @@ class JourneyPlanner:
 
             if max_rides >= 0 and current_ride_count > max_rides + 1:
                 continue
+
+            print(
+                f"Processing node {nodes_processed}: {current_stop_id} at {current_time.strftime('%H:%M:%S')} with cost {current_cost}, ride count {current_ride_count}, transfer duration {current_transfert_duration}"
+            )
             if current_stop_id == to_stop_id:
                 found = True
             else:
@@ -336,6 +389,8 @@ class JourneyPlanner:
                     cursor=cursor,
                 ):
                     v_datetime = self.parse_gtfs_time(current_time, v[1])
+                    if not v_datetime:
+                        continue
                     if (v[0], v_datetime) not in visited and (
                         v_datetime < earliest_arrival.get(v[0], datetime.datetime.max)
                     ):
@@ -590,6 +645,36 @@ class JourneyPlanner:
                 f"End at {end_step.to_stop_name} ({end_step.to_stop_id}) at {end_step.arrival_time}"
             )
         return "\n".join(summary) if summary else "No journey steps available."
+
+    def get_journey_summary_fr(self, journey_steps: list[JourneyStep]):
+        summary = []
+        if journey_steps:
+            start_step = journey_steps[0]
+            summary.append(
+                f"Départ de {start_step.from_stop_name} ({start_step.from_stop_id}) à {start_step.departure_time}"
+            )
+            for step in journey_steps:
+                if step.transfer:
+                    summary.append(
+                        f"Correspondance de {step.from_stop_name} ({step.from_stop_id}) à {step.to_stop_name} ({step.to_stop_id}) pendant {step.transfer_time} secondes"
+                    )
+                else:
+                    route_name = (
+                        step.route_short_name
+                        or step.route_long_name
+                        or "Ligne inconnue"
+                    )
+                    summary.append(
+                        f"-------------------------------------------------------------------------\n"
+                        f"Trajet sur {route_name} ({step.route_id}) de {step.from_stop_name} ({step.from_stop_id}) à {step.to_stop_name} ({step.to_stop_id}).\n"
+                        f"Trajet {step.trip_headsign} opéré par {step.agency_name}, départ à {step.departure_time} et arrivée à {step.arrival_time}\n"
+                        f"-------------------------------------------------------------------------"
+                    )
+            end_step = journey_steps[-1]
+            summary.append(
+                f"Arrivée à {end_step.to_stop_name} ({end_step.to_stop_id}) à {end_step.arrival_time}"
+            )
+        return "\n".join(summary) if summary else "Aucun trajet disponible."
 
     def get_journey_step_geometry(
         self,
