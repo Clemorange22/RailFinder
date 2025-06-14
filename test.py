@@ -1,4 +1,3 @@
-from math import e
 from database import Database
 from journey_planner import JourneyPlanner
 
