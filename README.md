@@ -102,4 +102,4 @@ Additionally, GTFS data is available for the following countries and services:
 - Denmark
 - FlixBus
 
-Thanks to https://data.public-transport.earth for providing a comprehensive GTFS data sources list for european countries and services.
+Thanks to https://public-transport.earth for providing a comprehensive GTFS data sources list for european countries and services.
