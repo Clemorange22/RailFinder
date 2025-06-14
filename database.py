@@ -272,7 +272,7 @@ class Database:
                 f"Failed to download GTFS data. HTTP status code: {response.status_code}"
             )
 
-    def populate_database(self, zip_buffer):
+    def populate_database(self, zip_buffer, id: int):
         # Connect to the database
         conn = sqlite3.connect(self.db_name)
         cursor = conn.cursor()
@@ -307,20 +307,32 @@ class Database:
                                 )
                             placeholders = ", ".join(["?"] * len(columns))
                             insert_query = f"INSERT OR IGNORE INTO {table_name} ({', '.join(columns)}) VALUES ({placeholders})"
+                            should_prefix_columns = [
+                                True if col.endswith("_id") else False
+                                for col in columns
+                            ]
+
                             for row in reader:
                                 values = [row[col] for col in columns]
+                                if should_prefix_columns:
+                                    values = [
+                                        f"{id}/{val}" if prefix else val
+                                        for val, prefix in zip(
+                                            values, should_prefix_columns
+                                        )
+                                    ]
                                 cursor.execute(insert_query, values)
 
         # Commit and close the connection
         conn.commit()
         conn.close()
 
-    def download_and_populate_gtfs(self, url):
+    def download_and_populate_gtfs(self, url: str, id: int):
         """
         Download GTFS data from the given URL and populate the database.
         """
         zip_buffer = self.download_gtfs(url)
-        self.populate_database(zip_buffer)
+        self.populate_database(zip_buffer, id)
 
     def get_connection(self):
         """
@@ -384,10 +396,12 @@ class Database:
         with open(data_path, "r") as file:
             data_sources = json.loads(file.read())
 
-        for name, gtfs_url in data_sources.items():
+        for i, (name, gtfs_url) in enumerate(data_sources.items()):
             print(f"Downloading GTFS data from {name}: {gtfs_url}")
             try:
-                self.download_and_populate_gtfs(gtfs_url)
+                self.download_and_populate_gtfs(
+                    gtfs_url, i
+                )  # the index is used to identify the source, to prefix all the ids with it
             except Exception as e:
                 print(f"Error downloading or populating data from {name}: {e}")
         print("Creating indexes for GTFS tables...")
