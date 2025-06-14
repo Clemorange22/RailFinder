@@ -31,15 +31,14 @@ class RoutePlannerApp:
         master.geometry("800x600")
 
         # --- Main Frames ---
+
+        map_canvas_frame = ttk.LabelFrame(master)
+        map_canvas_frame.pack(pady=10, padx=10, fill="both", expand=True, side=tk.RIGHT)
+
         control_frame = ttk.LabelFrame(
             master, text="Définir l'itinéraire", padding="10"
         )
-        control_frame.pack(side=tk.LEFT, fill=tk.Y, padx=10, pady=10)
-
-        display_frame = ttk.LabelFrame(
-            master, text="Informations de l'itinéraire", padding="10"
-        )
-        display_frame.pack(side=tk.RIGHT, fill=tk.BOTH, expand=True, padx=10, pady=10)
+        control_frame.pack(side=tk.TOP, fill=tk.Y, padx=10, pady=10)
 
         # --- Control Frame Widgets ---
 
@@ -84,28 +83,9 @@ class RoutePlannerApp:
         self.departure_time_entry.grid(row=3, column=1, padx=5, pady=5, sticky="w")
         self.departure_time_entry.insert(0, "08:00")
 
-        # Intermediate Stops
-        ttk.Label(control_frame, text="Étapes :").grid(
-            row=4, column=0, columnspan=2, padx=5, pady=5, sticky="w"
-        )
-        self.stops_frame = ttk.Frame(control_frame)
-        self.stops_frame.grid(
-            row=5, column=0, columnspan=2, padx=5, pady=5, sticky="ew"
-        )
-        self.intermediate_stops_entries = []
-        self.add_stop_button = ttk.Button(
-            control_frame, text="Ajouter une étape", command=self.add_stop
-        )
-        self.add_stop_button.grid(row=6, column=0, padx=5, pady=5, sticky="w")
-        self.add_stop_button = ttk.Entry(control_frame, width=30)
-        self.remove_stop_button = ttk.Button(
-            control_frame, text="Supprimer la dernière étape", command=self.remove_stop
-        )
-        self.remove_stop_button.grid(row=6, column=1, padx=5, pady=5, sticky="e")
-
         # Route Preference
         ttk.Label(control_frame, text="Préférence de trajet:").grid(
-            row=11, column=0, columnspan=2, padx=5, pady=10, sticky="w"
+            row=4, column=0, columnspan=2, padx=5, pady=10, sticky="w"
         )
         self.route_preference_var = tk.StringVar(value="Le plus rapide")
         ttk.Radiobutton(
@@ -113,25 +93,24 @@ class RoutePlannerApp:
             text="Le plus rapide (durée)",
             variable=self.route_preference_var,
             value="Le plus rapide",
-        ).grid(row=12, column=0, columnspan=2, sticky="w", padx=10)
+        ).grid(row=5, column=0, columnspan=2, sticky="w", padx=10)
         ttk.Radiobutton(
             control_frame,
             text="Moins de correspondances",
             variable=self.route_preference_var,
             value="Moins de correspondances",
-        ).grid(row=13, column=0, columnspan=2, sticky="w", padx=10)
+        ).grid(row=6, column=0, columnspan=2, sticky="w", padx=10)
 
         # Calculate Button
         calculate_button = ttk.Button(
             control_frame, text="Calculer l'itinéraire", command=self.calculate_route
         )
-        calculate_button.grid(row=14, column=0, columnspan=2, padx=5, pady=20)
+        calculate_button.grid(row=7, column=0, columnspan=2, padx=5, pady=20)
 
         # Display Frame Widgets
 
         # Display travel map
-        map_canvas_frame = ttk.LabelFrame(display_frame)
-        map_canvas_frame.pack(pady=10, padx=10, fill="both", expand=True)
+
         self.map_canvas = TkinterMapView(
             map_canvas_frame, width=400, height=260, corner_radius=0
         )
@@ -140,7 +119,7 @@ class RoutePlannerApp:
         self.map_canvas.set_zoom(5)
         self.map_canvas.pack(fill="both", expand=True)
 
-        route_details_frame = ttk.LabelFrame(display_frame, text="Détails du trajet")
+        route_details_frame = ttk.LabelFrame(master, text="Détails du trajet")
         route_details_frame.pack(pady=10, padx=10, fill="both", expand=True)
         self.route_details_text = tk.Text(
             route_details_frame, height=10, width=50, wrap=tk.WORD
@@ -176,35 +155,6 @@ class RoutePlannerApp:
         conn.close()
         return sorted(set(stop.stop_name for stop in stops if stop.stop_name))
 
-    def add_stop(self):
-        """Adds a new intermediate stop to the list of stops.
-        If the number of intermediate stops is less than 5, adds a new input field.
-        """
-        if len(self.intermediate_stops_entries) < 5:
-            row_num = len(self.intermediate_stops_entries)
-            stop_label = ttk.Label(self.stops_frame, text=f"Étape {row_num + 1}:")
-            stop_label.grid(row=row_num, column=0, padx=5, pady=2, sticky="w")
-            stop_entry = ttk.Entry(self.stops_frame, width=28)
-            stop_entry.grid(row=row_num, column=1, padx=5, pady=2, sticky="ew")
-            stop_entry.bind("<KeyRelease>", self.auto_completion_proposition)
-            stop_entry.bind("<Down>", self.focus_suggestions_listbox)
-            self.intermediate_stops_entries.append((stop_label, stop_entry))
-        else:
-            messagebox.showinfo(
-                "Limite atteinte", "Vous ne pouvez pas ajouter plus d'étapes."
-            )
-
-    def remove_stop(self):
-        """Delete the last intermediate stop entry."""
-        if self.intermediate_stops_entries:
-            label, entry = self.intermediate_stops_entries.pop()
-            label.destroy()
-            entry.destroy()
-        else:
-            messagebox.showinfo(
-                "Aucune étape", "Il n'y a pas d'étape intermédiaire à supprimer."
-            )
-
     def calculate_route(self):
         """Calculates the route based on the data entered by the user.
         Displays the route details and draws the route on the map.
@@ -219,11 +169,6 @@ class RoutePlannerApp:
 
             departure = self.departure_city_entry.get()
             arrival = self.arrival_city_entry.get()
-            stops = [
-                entry.get()
-                for _, entry in self.intermediate_stops_entries
-                if entry.get()
-            ]
 
             preference = self.route_preference_var.get()
 
@@ -265,8 +210,6 @@ class RoutePlannerApp:
             details += f"Arrivée: {arrival}:{to_stop_id}\n"
             details += f"Date et heure de départ (locale): {aware_local}\n"
             details += f"Date et heure de départ (UTC): {departure_datetime_utc}\n"
-            if stops:
-                details += f"Étapes: {', '.join(stops)}\n"
             details += f"Préférence: {preference}\n\n"
             details += f"Calcul en cours...\n"
 
@@ -302,8 +245,6 @@ class RoutePlannerApp:
                     self.journey_geometry = []
                     line = self.planner.get_journey_geometry(journey_steps)
                     if line:
-                        # result_str += "\n\nTracé du trajet:\n"
-                        # result_str += str(line)
                         self.journey_geometry = line
                 else:
                     result_str += "Aucun trajet trouvé.\n"
