@@ -280,7 +280,10 @@ class RoutePlannerApp:
 
             if from_stop_id and to_stop_id:
                 p, execution_time = self.planner.journey_search(
-                    from_stop_id, to_stop_id, departure_datetime_utc
+                    from_stop_id,
+                    to_stop_id,
+                    departure_datetime_utc,
+                    "fastest" if preference == "Le plus rapide" else "least_transfers",
                 )
                 result_str = ""
                 if p is not None:
