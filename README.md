@@ -130,5 +130,26 @@ The interface is here mainly to:
 - Handle user input (departure, arrival, journey steps, date and preferred time and options)
 - Display the map with the itinerary and the journey results
 
-This separation ensures that the application logic can be tested and maintained independently of the user interface, and makes it easier to adapt and modify the project.
+> This separation ensures that the application logic can be tested and maintained independently of the user interface, and makes it easier to adapt and modify the project.
 
+### Contributors and Roles
+
+Each group member contributed to this project as follows:
+
+_personnal implication grade is indicated next to each member_
+- **Clément Boittin** _[0.5]_
+  * Database creation and management
+  * A* algorithm and heuristics: journey route calculation
+  * Models creation
+  * README.md writing
+- **Noëlie Baur--Dognon:** _[0.2]_
+  * Interface modifications
+  * Map and itinerary display
+  * User input handling
+  * README.md writing
+- **Jules Brisard:** _[0.1]_
+  * Initial interface creation and modifications
+- **Antoine Lathuilière:** _[0.1]_
+  * Interface modifications (autocompletion method)
+- **An Lao:** _[0.1]_
+  * Interface modifications (loading window)
