@@ -136,10 +136,13 @@ The interface is here mainly to:
 
 Each group member contributed to this project as follows:
 
-_personnal implication grade is indicated next to each member_
-- **Clément Boittin** _[0.5]_
-  * Database creation and management
-  * A* algorithm and heuristics: journey route calculation
+_personnal implication grade is indicated next to each member. it reflects the time and effort invested in the project_
+- **Clément Boittin** _[0.65]_
+  * Database creation and management - SQLite
+  * Automatic GTFS data import
+  * Transfer generation between networks, optimization of the search of nearby stops using SQLite R-trees
+  * A* algorithm and heuristics: journey route calculation and visualization
+  * Optimization of database queries using indexes and a temporary table
   * Models creation
   * README.md writing
 - **Noëlie Baur--Dognon:** _[0.2]_
@@ -147,9 +150,11 @@ _personnal implication grade is indicated next to each member_
   * Map and itinerary display
   * User input handling
   * README.md writing
-- **Jules Brisard:** _[0.1]_
+- **Jules Brisard:** _[0.05]_
   * Initial interface creation and modifications
-- **Antoine Lathuilière:** _[0.1]_
+- **Antoine Lathuilière:** _[0.05]_
   * Interface modifications (autocompletion method)
-- **An Lao:** _[0.1]_
+- **An Lao:** _[0.05]_
   * Interface modifications (loading window)
+
+For a more detailed breakdown of contributions, see the repository's [Contributors](https://github.com/Clemorange22/RailFinder/graphs/contributors) section.
