@@ -17,10 +17,17 @@ class Database:
         self.db_name = db_name
 
     def reset_database(self):
+        """
+        Reset the database by deleting the existing file and creating a new one.
+        """
         if os.path.exists(self.db_name):
             os.remove(self.db_name)
 
     def create_metadata_table(self):
+        """
+        Create a metadata table to store information about the database, 
+        such as the last update time.
+        """
         conn = sqlite3.connect(self.db_name)
         cursor = conn.cursor()
         cursor.execute(
@@ -35,6 +42,20 @@ class Database:
         conn.close()
 
     def set_metadata(self, key: str, value: str):
+        """
+    Set or update a metadata key-value pair in the metadata table.
+
+    If the given key already exists in the metadata table, its value is updated.
+    If the key does not exist, a new entry is created.
+    This is useful for storing global information about the database, such as the last update time, version, or other configuration data.
+
+    Parameters
+    ----------
+    key : str
+        The metadata key to set or update.
+    value : str
+        The value to associate with the given key.
+    """
         conn = sqlite3.connect(self.db_name)
         cursor = conn.cursor()
         cursor.execute(
@@ -44,6 +65,19 @@ class Database:
         conn.close()
 
     def get_metadata(self, key: str) -> Optional[str]:
+        """
+        Get the value of a metadata key from the metadata table.
+        If the key does not exist, returns None.
+        Parameters
+        ----------
+        key : str
+            The metadata key to retrieve the value for.
+        Returns
+        -------
+        str or None
+            The value associated with the given key, or None if the key does not exist.
+                
+        """
         conn = sqlite3.connect(self.db_name)
         cursor = conn.cursor()
         # has the metadata table been created?
@@ -60,6 +94,12 @@ class Database:
         return row[0] if row else None
 
     def create_gtfs_tables(self):
+        """
+        Create the necessary GTFS tables in the SQLite database.
+        This method creates tables for agency, stops, routes, trips, stop_times, calendar,
+        calendar_dates, shapes, transfers, and feed_info.
+        Each table is created with the appropriate schema based on the GTFS specification.
+        """
         conn = sqlite3.connect(self.db_name)
         cursor = conn.cursor()
 
@@ -262,6 +302,21 @@ class Database:
         conn.close()
 
     def download_gtfs(self, url):
+        """
+        Download GTFS data from the given URL and return a BytesIO object containing the ZIP file.
+        Parameters
+        ----------
+        url : str
+            The URL to download the GTFS ZIP file from.
+        Returns
+        -------
+        io.BytesIO
+            A BytesIO object containing the downloaded GTFS ZIP file.
+        Raises
+        ------
+        Exception
+            If the download fails or the response status code is not 200.
+        """
         # Download the GTFS ZIP file
         response = requests.get(url)
         if response.status_code == 200:
@@ -273,6 +328,21 @@ class Database:
             )
 
     def populate_database(self, zip_buffer, id: int):
+        """
+        Populate the SQLite database with GTFS data from the given ZIP file.
+        This method reads the GTFS files from the ZIP, creates tables if they do not exist,
+        and inserts the data into the corresponding tables.
+        Parameters
+        ----------
+        zip_buffer : io.BytesIO
+            A BytesIO object containing the GTFS ZIP file.
+        id : int
+            An identifier used to prefix IDs in the GTFS data, useful for distinguishing between different data sources.
+        Raises
+        ------
+            ValueError
+            If a CSV file in the GTFS data has no header or is improperly formatted.
+        """
         # Connect to the database
         conn = sqlite3.connect(self.db_name)
         cursor = conn.cursor()
@@ -342,6 +412,11 @@ class Database:
         return conn, conn.cursor()
 
     def create_gtfs_indexes(self):
+        """
+        Create indexes for the GTFS tables to improve query performance.
+        This method creates indexes on frequently queried columns in the GTFS tables,
+        such as stop_id, trip_id, service_id, and others.
+        """
         conn = sqlite3.connect(self.db_name)
         cursor = conn.cursor()
 
@@ -439,6 +514,17 @@ class Database:
             print("Database is up-to-date, no need to reload GTFS data.")
 
     def get_agency_by_id(self, agency_id: str) -> Optional[Agency]:
+        """
+        Get an agency by its ID from the database.
+        Parameters
+        ----------
+        agency_id : str
+            The ID of the agency to retrieve.
+        Returns
+        -------
+        Optional[Agency]
+            An Agency object if found, if not found None.
+        """
         conn = sqlite3.connect(self.db_name)
         conn.row_factory = sqlite3.Row
         cursor = conn.cursor()
@@ -448,6 +534,16 @@ class Database:
         return Agency(**dict(row)) if row else None
 
     def get_route_by_id(self, route_id: str) -> Optional[Route]:
+        """
+        Get a route by its ID from the database.
+        Parameters
+        ----------
+        route_id : str
+            The ID of the route to retrieve.
+        Returns
+        -------
+        Optional[Route]
+            A Route object if found, if not found None."""
         conn = sqlite3.connect(self.db_name)
         conn.row_factory = sqlite3.Row
         cursor = conn.cursor()
@@ -457,6 +553,17 @@ class Database:
         return Route(**dict(row)) if row else None
 
     def get_shape_by_id(self, shape_id: str) -> Optional[Shape]:
+        """
+        Get a shape by its ID from the database.
+        Parameters
+        ----------
+        shape_id : str
+            The ID of the shape to retrieve.
+        Returns
+        -------
+        Optional[Shape]
+            A Shape object if found, if not found None.
+        """
         conn = sqlite3.connect(self.db_name)
         conn.row_factory = sqlite3.Row
         cursor = conn.cursor()
@@ -468,6 +575,21 @@ class Database:
     def get_stop_time_by_id(
         self, trip_id: str, stop_id: str, stop_sequence: int
     ) -> Optional[StopTime]:
+        """
+        Get a stop time by trip ID, stop ID, and stop sequence from the database.
+        Parameters
+        ----------
+        trip_id : str
+            The ID of the trip.
+        stop_id : str
+            The ID of the stop.
+        stop_sequence : int
+            The sequence number of the stop in the trip.
+        Returns
+        -------
+        Optional[StopTime]
+            A StopTime object if found, if not found None.
+        """
         conn = sqlite3.connect(self.db_name)
         conn.row_factory = sqlite3.Row
         cursor = conn.cursor()
@@ -480,6 +602,17 @@ class Database:
         return StopTime(**dict(row)) if row else None
 
     def get_stop_by_id(self, stop_id: str) -> Optional[Stop]:
+        """
+        Get a stop by its ID from the database.
+        Parameters
+        ----------
+        stop_id : str
+            The ID of the stop to retrieve.
+        Returns
+        -------
+        Optional[Stop]
+            A Stop object if found, if not found None.
+        """
         conn = sqlite3.connect(self.db_name)
         conn.row_factory = sqlite3.Row
         cursor = conn.cursor()
@@ -491,6 +624,19 @@ class Database:
     def get_transfer_by_id(
         self, from_stop_id: str, to_stop_id: str
     ) -> Optional[Transfer]:
+        """
+        Get a transfer by its from_stop_id and to_stop_id from the database.
+        Parameters
+        ----------
+        from_stop_id : str
+            The ID of the stop from which the transfer originates.
+        to_stop_id : str
+            The ID of the stop to which the transfer goes.
+        Returns
+        -------
+        Optional[Transfer]
+            A Transfer object if found, if not found None.
+        """
         conn = sqlite3.connect(self.db_name)
         conn.row_factory = sqlite3.Row
         cursor = conn.cursor()
@@ -503,6 +649,17 @@ class Database:
         return Transfer(**dict(row)) if row else None
 
     def get_trip_by_id(self, trip_id: str) -> Optional[Trip]:
+        """
+        Get a trip by its ID from the database.
+        Parameters
+        ----------
+        trip_id : str
+            The ID of the trip to retrieve.
+        Returns
+        -------
+        Optional[Trip]
+            A Trip object if found, if not found None.
+        """
         conn = sqlite3.connect(self.db_name)
         conn.row_factory = sqlite3.Row
         cursor = conn.cursor()

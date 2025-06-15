@@ -286,6 +286,10 @@ class JourneyPlanner:
         conn: sqlite3.Connection | None = None,
         cursor: sqlite3.Cursor | None = None,
     ) -> tuple:
+        """
+        Get the geographical position (latitude, longitude) of a stop by its ID.
+        Returns a tuple (latitude, longitude) or None if the stop is not found.
+        """
         if conn is None or cursor is None:
             conn, cursor = self.db.get_connection()
         sql = """SELECT stop_lat, stop_lon FROM stops WHERE stop_id = ?"""
@@ -568,6 +572,8 @@ class JourneyPlanner:
         return path, execution_time_seconds
 
     def reconstruct_path(self, previous, current_stop_id, current_time):
+        """Reconstruct the path from the previous nodes.
+        Returns a list of tuples (stop_id, time, optional trip_id)."""
         path = []
         current = (current_stop_id, current_time)
         while previous[self.get_node(current)] != self.get_node(current):

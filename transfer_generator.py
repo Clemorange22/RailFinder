@@ -34,6 +34,10 @@ class TransferGenerator:
         self.db_write_lock = threading.Lock()
 
     def ensure_spatial_index(self):
+        """
+        Ensure the spatial index on stops is created and populated.
+        This creates an R-tree index on the stop coordinates to speed up spatial queries.
+        """
         conn, cur = self.db.get_connection()
         # Add stop_idx column to stops if it doesn't exist
         cur.execute("PRAGMA table_info(stops)")
@@ -80,6 +84,22 @@ class TransferGenerator:
         return delta_lat, delta_lon
 
     def process_chunk(self, args):
+        """
+        Process a chunk of stops to find potential transfers.
+        This function is run in parallel for each chunk of stops.
+        Args:
+            args (tuple): A tuple containing:
+                - stop_chunk: List of tuples (stop_id, lat, lon) for the chunk of stops
+                - existing_transfers: Set of existing transfers to avoid duplicates
+                - pbar: progress bar instance for updating progress
+                - lock: threading lock for thread-safe updates to the progress bar
+                - update_every: Number of stops after which to update the progress bar
+        Returns:
+            tuple: A tuple containing:
+                - stops_processed: Number of stops processed in the chunk
+                - insertions_total: Total number of new transfers found in this chunk
+                - insertions: List of tuples (from_stop_id, to_stop_id) for new transfers
+        """
         stop_chunk, existing_transfers, pbar, lock, update_every = args
         conn, cur = self.db.get_connection()
         insertions = set()

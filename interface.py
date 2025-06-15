@@ -67,7 +67,7 @@ class RoutePlannerApp:
         self.arrival_city_entry.bind("<KeyRelease>", self.auto_completion_proposition)
         self.arrival_city_entry.bind("<Down>", self.focus_suggestions_listbox)
 
-        # Date & Time of Departure
+        # Date & Time of Departure entries
         ttk.Label(control_frame, text="Date de départ (JJ/MM/AAAA) :").grid(
             row=2, column=0, padx=5, pady=5, sticky="w"
         )
@@ -109,15 +109,15 @@ class RoutePlannerApp:
         # Display Frame Widgets
 
         # Display travel map
-
         self.map_canvas = TkinterMapView(
             map_canvas_frame, width=400, height=260, corner_radius=0
         )
-        # definition of zoom scale and map position
+        # definition of initial zoom scale and map position
         self.map_canvas.set_position(46.7111, 1.7191)
         self.map_canvas.set_zoom(5)
         self.map_canvas.pack(fill="both", expand=True)
 
+        # Display route details frame
         route_details_frame = ttk.LabelFrame(master, text="Détails du trajet")
         route_details_frame.pack(pady=10, padx=10, fill="both", expand=True)
         self.route_details_text = tk.Text(
@@ -129,10 +129,9 @@ class RoutePlannerApp:
         )
         self.route_details_text.config(state=tk.DISABLED)
         self.loading_label.destroy()
+
         # Chargement label + progressbar
-
         self.loading_frame = ttk.Frame(master, relief="raised", padding=15)
-
         self.loading_label = ttk.Label(
             self.loading_frame,
             text="🔄 Calcul de l'itinéraire...",
@@ -149,6 +148,7 @@ class RoutePlannerApp:
         self.suggestions_names = []
         self.suggestions_history = set()
 
+    # Methods
     def get_all_stop_names(self):
         """
         Returns a sorted list of all unique stop names from the database.
@@ -166,6 +166,10 @@ class RoutePlannerApp:
         """
 
         def route_calculation():
+            """
+            Calculates the route in a separate thread to avoid blocking the UI.
+            Displays a loading frame with a progress bar during the calculation of the route.
+            """
             self.loading_frame.place(relx=0.5, rely=0.85, anchor="center")
             self.loading_bar.start(10)  # Démarrer la barre de chargement
             self.master.update_idletasks()
@@ -184,6 +188,10 @@ class RoutePlannerApp:
             result_str = None
 
             def update_ui_final():
+                """
+                Final UI update after route calculation.
+                Updates the UI with the route details and stops the loading bar.
+                """
                 self.route_details_text.config(state=tk.NORMAL)
                 if result_str:
                     self.route_details_text.insert(tk.END, result_str)
@@ -257,6 +265,7 @@ class RoutePlannerApp:
             details += f"Calcul en cours... (Temps de calcul max: 5 minutes)\n"
 
             def update_ui():
+                """Updates the UI with the route details."""
                 self.route_details_text.config(state=tk.NORMAL)
                 self.route_details_text.delete(1.0, tk.END)
                 self.route_details_text.insert(tk.END, details)
@@ -341,7 +350,7 @@ class RoutePlannerApp:
             self.suggestions_listbox.place_forget()
             self.active_entry = None
 
-    def focus_suggestions_listbox(self, event):
+    def focus_suggestions_listbox(self, event):#Generated AI (Copilot)
         if self.suggestions_listbox.size() > 0:
             self.active_entry = event.widget
             self.suggestions_listbox.focus_set()
@@ -349,7 +358,7 @@ class RoutePlannerApp:
             self.suggestions_listbox.selection_set(0)
             self.suggestions_listbox.activate(0)
 
-    def navigate_up(self, _=None):
+    def navigate_up(self, _=None):#Generated AI (Copilot)
         """Navigates up in the suggestions list.
         Method called when the user presses the up arrow key."""
         cur = self.suggestions_listbox.curselection()
@@ -365,7 +374,7 @@ class RoutePlannerApp:
                 self.suggestions_listbox.see(0)
         self.suggestions_listbox.focus_set()
 
-    def navigate_down(self, _=None):
+    def navigate_down(self, _=None):#Generated AI (Copilot)
         """Navigates down in the suggestions list.
         Method called when the user presses the down arrow key."""
         cur = self.suggestions_listbox.curselection()
@@ -384,7 +393,7 @@ class RoutePlannerApp:
 
     def get_stop_lat_lon_by_name(self, stop_name):
         """
-        Returns (lat, lon) for a given stop_name, or None if not found.
+        Returns (lat, lon), the latitude and longitude coordinates for a given stop_name, or None if not found.
         """
         conn = sqlite3.connect(self.db_path)
         cursor = conn.cursor()
