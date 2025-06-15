@@ -20,6 +20,7 @@ Group ISN (Informatique et Société Numérique) project at INSA Lyon, France. (
 - Cross-network transfers generation, allowing seamless journey planning across different transport modes.
 - Visual interface built with Tkinter, with pathfinding visualization.
 
+[Video demonstration](https://www.youtube.com/watch?v=sw_L7fFnozY)
 
 ### Installation
 1. Clone the repository:
@@ -157,4 +158,4 @@ _personnal implication grade is indicated next to each member. it reflects the t
 - **An Lao:** _[0.05]_
   * Interface modifications (loading window)
 
-For a more detailed breakdown of contributions, see the repository's [Contributors](https://github.com/Clemorange22/RailFinder/graphs/contributors) section.
+For a more detailed breakdown of contributions, see the repository's [Contributors](https://github.com/Clemorange22/RailFinder/graphs/contributors) section.zmail
