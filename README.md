@@ -103,3 +103,32 @@ Additionally, GTFS data is available for the following countries and services:
 - FlixBus
 
 Thanks to https://eu.data.public-transport.earth for providing a comprehensive GTFS data sources list for european countries and services.
+
+### Modularity
+The application is organized so that the application logic is separated from the visual interface. 
+
+#### Application logic
+All the core functionnalities, like the route calculation, the journey planning, but also the database management and the import of GTFS data are implemented and sorted in different Python files. 
+
+The main entry point of the application is `main.py`. It initializes the database and the journey planner, then launches the graphical user interface. This file connects all the core components and starts the RailFinder application.
+
+The core functionnalities are divided in three main files named after the class they contain:
+  - **`JourneyPlanner`**: a class that handles the journey search, with a A* Algorithm and heuristics to calculate and find the optimised journey
+  - **`Database`**: a class that manages SQLite database operations, GTFS data import and metadata to allow access to the european transportation network, necessary to run the application
+  - **`TransferGenerator`**: a class that automatically creates transfers between nearby stops across networks.
+
+
+
+Two additional files complete the application logic:
+- **`utils.py`**: contains helper functions for calculations and data processing
+- **`models.py`**: defines the main structures used in the application, mainly the classes representing all the stops, their positions, transfers, time etc.
+
+#### Visual Interface
+The user interface is built using Tkinter in the class named `RoutePlannerApp` (contained in the dedicated file `interface.py`).
+
+The interface is here mainly to:
+- Handle user input (departure, arrival, journey steps, date and preferred time and options)
+- Display the map with the itinerary and the journey results
+
+This separation ensures that the application logic can be tested and maintained independently of the user interface, and makes it easier to adapt and modify the project.
+
