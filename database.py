@@ -25,7 +25,7 @@ class Database:
 
     def create_metadata_table(self):
         """
-        Create a metadata table to store information about the database, 
+        Create a metadata table to store information about the database,
         such as the last update time.
         """
         conn = sqlite3.connect(self.db_name)
@@ -76,7 +76,7 @@ class Database:
         -------
         str or None
             The value associated with the given key, or None if the key does not exist.
-                
+
         """
         conn = sqlite3.connect(self.db_name)
         cursor = conn.cursor()
@@ -290,6 +290,7 @@ class Database:
                     plan_rev TEXT,
                     default_lang TEXT,
                     feed_contact_mail TEXT,
+                    feed_contact_email TEXT,
                     feed_contact_url TEXT
                 )
             """,
